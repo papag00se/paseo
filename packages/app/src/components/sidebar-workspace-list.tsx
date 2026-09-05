@@ -36,7 +36,14 @@ import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop
 import { type GestureType } from "react-native-gesture-handler";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
-import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react-native";
+import {
+  ExternalLink,
+  FolderInput,
+  Settings,
+  MoreVertical,
+  Plus,
+  Trash2,
+} from "lucide-react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
@@ -83,6 +90,13 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { ProjectLeadingVisual } from "@/components/sidebar/project-leading-visual";
+import {
+  ProjectGroupBlock,
+  SidebarProjectGroupModals,
+  useOpenProjectGroupAssignment,
+} from "@/components/sidebar/project-groups";
+import { partitionSidebarProjects } from "@/components/sidebar/project-groups-model";
+import { useSidebarProjectGroupsStore } from "@/stores/sidebar-project-groups-store";
 import { useToast } from "@/contexts/toast-context";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { toWorktreeArchiveRisk } from "@/git/worktree-archive-warning";
@@ -163,6 +177,7 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedSettings = withUnistyles(Settings);
+const ThemedFolderInput = withUnistyles(FolderInput);
 
 const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
@@ -457,6 +472,9 @@ function ProjectRowTrailingActions({
 
 const trash2LeadingIcon = <ThemedTrash2 size={14} uniProps={foregroundMutedColorMapping} />;
 const settingsLeadingIcon = <ThemedSettings size={14} uniProps={foregroundMutedColorMapping} />;
+const moveToGroupLeadingIcon = (
+  <ThemedFolderInput size={14} uniProps={foregroundMutedColorMapping} />
+);
 const openInNewWindowLeadingIcon = (
   <ThemedExternalLink size={14} uniProps={foregroundMutedColorMapping} />
 );
@@ -541,6 +559,11 @@ function ProjectMenuItems({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const openProjectGroupAssignment = useOpenProjectGroupAssignment();
+  const handleMoveToGroup = useCallback(
+    () => openProjectGroupAssignment(projectViewKey),
+    [openProjectGroupAssignment, projectViewKey],
+  );
   const handleOpenProjectSettings = useCallback(() => {
     if (!settingsTarget) return;
     router.navigate(buildProjectSettingsRoute(settingsTarget.serverId, settingsTarget.projectId));
@@ -569,6 +592,14 @@ function ProjectMenuItems({
           {t("sidebar.project.actions.openSettings")}
         </ProjectMenuItem>
       ) : null}
+      <ProjectMenuItem
+        surface={surface}
+        testID={`sidebar-project-menu-move-to-group-${projectViewKey}`}
+        leading={moveToGroupLeadingIcon}
+        onSelect={handleMoveToGroup}
+      >
+        Move to group
+      </ProjectMenuItem>
       {canOpenInNewWindow ? (
         <ProjectMenuItem
           surface={surface}
@@ -1990,7 +2021,12 @@ export function SidebarWorkspaceList({
       />
     );
 
-  return content;
+  return (
+    <>
+      <SidebarProjectGroupModals />
+      {content}
+    </>
+  );
 }
 
 /**
@@ -2103,6 +2139,10 @@ function ProjectModeList({
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
 }) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
+  const projectGroups = useSidebarProjectGroupsStore((state) => state.groups);
+  const groupIdByProjectViewKey = useSidebarProjectGroupsStore(
+    (state) => state.groupIdByProjectViewKey,
+  );
   const [creatingWorkspaceIds, setCreatingWorkspaceIds] = useState<Set<string>>(() => new Set());
   const creatingWorkspaceTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
@@ -2377,10 +2417,23 @@ function ProjectModeList({
     ],
   );
 
-  const projectBody =
-    projects.length === 0 ? (
+  const groupSections = useMemo(
+    () =>
+      partitionSidebarProjects({
+        projects: unpinnedProjects,
+        groups: projectGroups,
+        groupIdByProjectViewKey,
+      }),
+    [groupIdByProjectViewKey, projectGroups, unpinnedProjects],
+  );
+
+  let projectBody: ReactElement;
+  if (projects.length === 0) {
+    projectBody = (
       <SidebarProjectEmptyState onAddProject={onAddProject} onImportSession={onImportSession} />
-    ) : (
+    );
+  } else if (projectGroups.length === 0) {
+    projectBody = (
       <DraggableList
         testID="sidebar-project-list"
         data={unpinnedProjects}
@@ -2396,6 +2449,36 @@ function ProjectModeList({
         containerStyle={styles.projectListContainer}
       />
     );
+  } else {
+    projectBody = (
+      <View testID="sidebar-project-groups-list">
+        {groupSections.map((section) => (
+          <ProjectGroupBlock
+            key={section.group?.id ?? "ungrouped"}
+            group={section.group}
+            projects={section.projects}
+          >
+            {section.projects.length > 0 ? (
+              <DraggableList
+                testID={`sidebar-project-list-${section.group?.id ?? "ungrouped"}`}
+                data={section.projects}
+                keyExtractor={projectViewKeyExtractor}
+                renderItem={renderProject}
+                onDragEnd={handleProjectDragEnd}
+                extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
+                scrollEnabled={false}
+                useDragHandle
+                nestable={platformIsNative}
+                simultaneousGestureRef={parentGestureRef}
+                gestureHostPresented={dragGestureHostActive}
+                containerStyle={styles.projectListContainer}
+              />
+            ) : null}
+          </ProjectGroupBlock>
+        ))}
+      </View>
+    );
+  }
 
   const content = (
     <>
