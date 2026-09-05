@@ -23,6 +23,7 @@ interface SidebarProjectGroupsState {
   createGroup: (input: { name: string; iconUri?: string | null }) => string;
   updateGroup: (id: string, input: { name: string; iconUri?: string | null }) => void;
   deleteGroup: (id: string) => void;
+  reorderGroups: (orderedGroupIds: string[]) => void;
   assignProject: (projectViewKey: string, groupId: string | null) => void;
   toggleGroupCollapsed: (id: string) => void;
 }
@@ -120,6 +121,22 @@ export const useSidebarProjectGroupsStore = create<SidebarProjectGroupsState>()(
             [...state.collapsedGroupIds].filter((groupId) => groupId !== id),
           ),
         }));
+      },
+      reorderGroups: (orderedGroupIds) => {
+        set((state) => {
+          const groupsById = new Map(state.groups.map((group) => [group.id, group]));
+          const seen = new Set<string>();
+          const reordered = orderedGroupIds.flatMap((id) => {
+            const group = groupsById.get(id);
+            if (!group || seen.has(id)) return [];
+            seen.add(id);
+            return [group];
+          });
+          for (const group of state.groups) {
+            if (!seen.has(group.id)) reordered.push(group);
+          }
+          return { groups: reordered };
+        });
       },
       assignProject: (projectViewKey, groupId) => {
         set((state) => {
