@@ -95,7 +95,10 @@ import {
   SidebarProjectGroupModals,
   useOpenProjectGroupAssignment,
 } from "@/components/sidebar/project-groups";
-import { partitionSidebarProjects } from "@/components/sidebar/project-groups-model";
+import {
+  partitionSidebarProjects,
+  type SidebarProjectGroupSection,
+} from "@/components/sidebar/project-groups-model";
 import { useSidebarProjectGroupsStore } from "@/stores/sidebar-project-groups-store";
 import { useToast } from "@/contexts/toast-context";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
@@ -2140,6 +2143,7 @@ function ProjectModeList({
 }) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const projectGroups = useSidebarProjectGroupsStore((state) => state.groups);
+  const reorderProjectGroups = useSidebarProjectGroupsStore((state) => state.reorderGroups);
   const groupIdByProjectViewKey = useSidebarProjectGroupsStore(
     (state) => state.groupIdByProjectViewKey,
   );
@@ -2427,6 +2431,64 @@ function ProjectModeList({
     [groupIdByProjectViewKey, projectGroups, unpinnedProjects],
   );
 
+  const groupedSections = useMemo(
+    () => groupSections.slice(0, projectGroups.length),
+    [groupSections, projectGroups.length],
+  );
+  const ungroupedSection = groupSections[groupSections.length - 1];
+  const handleGroupDragEnd = useCallback(
+    (reorderedSections: SidebarProjectGroupSection[]) => {
+      reorderProjectGroups(
+        reorderedSections.flatMap((section) => (section.group ? [section.group.id] : [])),
+      );
+    },
+    [reorderProjectGroups],
+  );
+  const groupSectionKeyExtractor = useCallback(
+    (section: SidebarProjectGroupSection) => section.group?.id ?? "ungrouped",
+    [],
+  );
+  const renderGroupedSection = useCallback(
+    ({
+      item: section,
+      drag,
+      isActive,
+      dragHandleProps,
+    }: DraggableRenderItemInfo<SidebarProjectGroupSection>) => (
+      <ProjectGroupBlock
+        group={section.group}
+        projects={section.projects}
+        drag={drag}
+        dragHandleProps={dragHandleProps}
+        isDragging={isActive}
+      >
+        {section.projects.length > 0 ? (
+          <DraggableList
+            testID={`sidebar-project-list-${section.group?.id ?? "ungrouped"}`}
+            data={section.projects}
+            keyExtractor={projectViewKeyExtractor}
+            renderItem={renderProject}
+            onDragEnd={handleProjectDragEnd}
+            extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
+            scrollEnabled={false}
+            useDragHandle
+            nestable={platformIsNative}
+            simultaneousGestureRef={parentGestureRef}
+            gestureHostPresented={dragGestureHostActive}
+            containerStyle={styles.projectListContainer}
+          />
+        ) : null}
+      </ProjectGroupBlock>
+    ),
+    [
+      activeWorkspaceSelection,
+      dragGestureHostActive,
+      handleProjectDragEnd,
+      parentGestureRef,
+      renderProject,
+    ],
+  );
+
   let projectBody: ReactElement;
   if (projects.length === 0) {
     projectBody = (
@@ -2452,16 +2514,25 @@ function ProjectModeList({
   } else {
     projectBody = (
       <View testID="sidebar-project-groups-list">
-        {groupSections.map((section) => (
-          <ProjectGroupBlock
-            key={section.group?.id ?? "ungrouped"}
-            group={section.group}
-            projects={section.projects}
-          >
-            {section.projects.length > 0 ? (
+        <DraggableList
+          testID="sidebar-project-group-order"
+          data={groupedSections}
+          keyExtractor={groupSectionKeyExtractor}
+          renderItem={renderGroupedSection}
+          onDragEnd={handleGroupDragEnd}
+          scrollEnabled={false}
+          useDragHandle
+          nestable={platformIsNative}
+          simultaneousGestureRef={parentGestureRef}
+          gestureHostPresented={dragGestureHostActive}
+          containerStyle={styles.projectListContainer}
+        />
+        {ungroupedSection ? (
+          <ProjectGroupBlock group={null} projects={ungroupedSection.projects}>
+            {ungroupedSection.projects.length > 0 ? (
               <DraggableList
-                testID={`sidebar-project-list-${section.group?.id ?? "ungrouped"}`}
-                data={section.projects}
+                testID="sidebar-project-list-ungrouped"
+                data={ungroupedSection.projects}
                 keyExtractor={projectViewKeyExtractor}
                 renderItem={renderProject}
                 onDragEnd={handleProjectDragEnd}
@@ -2475,7 +2546,7 @@ function ProjectModeList({
               />
             ) : null}
           </ProjectGroupBlock>
-        ))}
+        ) : null}
       </View>
     );
   }

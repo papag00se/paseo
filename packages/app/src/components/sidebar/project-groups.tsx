@@ -1,16 +1,25 @@
 import { Buffer } from "buffer";
-import React, { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+  type Ref,
+} from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import {
   ChevronDown,
   ChevronRight,
   FolderPlus,
+  GripVertical,
   MoreVertical,
   Pencil,
   Trash2,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
+import type { DraggableListDragHandleProps } from "@/components/draggable-list.types";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { ProjectLeadingVisual } from "@/components/sidebar/project-leading-visual";
 import { Button } from "@/components/ui/button";
@@ -34,6 +43,7 @@ import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
+const ThemedGripVertical = withUnistyles(GripVertical);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedTrash2 = withUnistyles(Trash2);
@@ -69,14 +79,59 @@ export function NewProjectGroupButton(): ReactElement {
   );
 }
 
+function ProjectGroupDragHandle({
+  id,
+  name,
+  drag,
+  dragHandleProps,
+}: {
+  id: string;
+  name: string;
+  drag?: () => void;
+  dragHandleProps?: DraggableListDragHandleProps;
+}): ReactElement | null {
+  if (!drag) return null;
+  const {
+    role: _dragRole,
+    tabIndex: _dragTabIndex,
+    "aria-roledescription": _dragRoleDescription,
+    ...dragAttributes
+  } = dragHandleProps?.attributes ?? {};
+  return (
+    <View
+      {...dragAttributes}
+      {...dragHandleProps?.listeners}
+      ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Reorder ${name}`}
+        delayLongPress={200}
+        hitSlop={6}
+        onLongPress={drag}
+        style={styles.groupDragHandle}
+        testID={`sidebar-project-group-drag-${id}`}
+      >
+        <ThemedGripVertical size={14} uniProps={mutedMapping} />
+      </Pressable>
+    </View>
+  );
+}
+
 export function ProjectGroupBlock({
   group,
   projects,
   children,
+  drag,
+  dragHandleProps,
+  isDragging = false,
 }: {
   group: SidebarProjectGroup | null;
   projects: readonly SidebarProjectEntry[];
   children: ReactElement | ReactElement[] | null;
+  drag?: () => void;
+  dragHandleProps?: DraggableListDragHandleProps;
+  isDragging?: boolean;
 }): ReactElement | null {
   const collapsedIds = useSidebarProjectGroupsStore((state) => state.collapsedGroupIds);
   const toggle = useSidebarProjectGroupsStore((state) => state.toggleGroupCollapsed);
@@ -107,8 +162,20 @@ export function ProjectGroupBlock({
   if (!group && projects.length === 0) return null;
 
   return (
-    <View role="group" accessibilityLabel={name} style={styles.groupBlock}>
+    <View
+      role="group"
+      accessibilityLabel={name}
+      style={[styles.groupBlock, isDragging && styles.groupBlockDragging]}
+    >
       <View style={styles.groupRow}>
+        {group ? (
+          <ProjectGroupDragHandle
+            id={id}
+            name={name}
+            drag={drag}
+            dragHandleProps={dragHandleProps}
+          />
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${collapsed ? "Expand" : "Collapse"} ${name}`}
@@ -381,11 +448,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   pressed: { opacity: 0.65 },
   groupBlock: { marginBottom: theme.spacing[1] },
+  groupBlockDragging: { opacity: 0.7 },
   groupRow: {
     minHeight: 34,
     paddingHorizontal: theme.spacing[2],
     flexDirection: "row",
     alignItems: "center",
+  },
+  groupDragHandle: {
+    width: 22,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
   },
   groupMain: {
     flex: 1,

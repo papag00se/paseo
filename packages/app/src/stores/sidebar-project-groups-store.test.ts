@@ -40,6 +40,20 @@ describe("sidebar project groups store", () => {
     expect(useSidebarProjectGroupsStore.getState().groupIdByProjectViewKey).toEqual({});
   });
 
+  it("reorders groups while preserving any omitted groups", () => {
+    const first = useSidebarProjectGroupsStore.getState().createGroup({ name: "First" });
+    const second = useSidebarProjectGroupsStore.getState().createGroup({ name: "Second" });
+    const third = useSidebarProjectGroupsStore.getState().createGroup({ name: "Third" });
+
+    useSidebarProjectGroupsStore.getState().reorderGroups([third, first]);
+
+    expect(useSidebarProjectGroupsStore.getState().groups.map(({ id }) => id)).toEqual([
+      third,
+      first,
+      second,
+    ]);
+  });
+
   it("moves a project between a group and Ungrouped", () => {
     const id = useSidebarProjectGroupsStore.getState().createGroup({ name: "Work" });
     const store = useSidebarProjectGroupsStore.getState();
