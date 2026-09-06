@@ -26,6 +26,9 @@ export function resolvePreferredEditorId(
   ) {
     return storedEditorId;
   }
+  if (storedEditorId === null && availableEditorIds.includes("vscode")) {
+    return "vscode";
+  }
   return availableEditorIds[0] ?? null;
 }
 

@@ -6,7 +6,11 @@ describe("resolvePreferredEditorId", () => {
     expect(resolvePreferredEditorId(["cursor", "vscode"], "vscode")).toBe("vscode");
   });
 
-  it("falls back to the first available editor when the stored one is missing", () => {
+  it("prefers VS Code when no editor has been selected", () => {
+    expect(resolvePreferredEditorId(["cursor", "vscode", "finder"], null)).toBe("vscode");
+  });
+
+  it("falls back to the first available editor when VS Code is unavailable", () => {
     expect(resolvePreferredEditorId(["zed", "finder"], "cursor")).toBe("zed");
   });
 
