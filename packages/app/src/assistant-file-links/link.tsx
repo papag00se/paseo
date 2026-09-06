@@ -1,6 +1,7 @@
 import { useMemo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { Platform, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ExternalLink } from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
 import { MarkdownTextSpan } from "@/components/markdown-text";
 import { MarkdownLinkText } from "@/components/markdown/link-text";
@@ -11,6 +12,13 @@ import { markdownCopyDataSet } from "@/assistant-selection-copy/markup";
 import { useAssistantFileLinkResolverContext } from "./provider";
 import type { AssistantFileLinkSource } from "./resolver";
 import { useFileLink } from "./use-file-link";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import type { Theme } from "@/styles/theme";
 
 interface AssistantMarkdownLinkProps {
   source: AssistantFileLinkSource;
@@ -18,6 +26,10 @@ interface AssistantMarkdownLinkProps {
   monoSurface?: boolean;
   children: ReactNode;
 }
+
+const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const ThemedExternalLink = withUnistyles(ExternalLink);
+const openInEditorLeading = <ThemedExternalLink size={14} uniProps={mutedColorMapping} />;
 
 const MARKDOWN_CODE_LINK_DATASET = {
   ...CODE_SURFACE_DATASET,
@@ -30,7 +42,7 @@ export function AssistantMarkdownLink({
   monoSurface,
   children,
 }: AssistantMarkdownLinkProps) {
-  const { target, onHoverIn, onPress } = useFileLink(source);
+  const { target, onHoverIn, onPress, onOpenInEditor } = useFileLink(source);
   const { configRef } = useAssistantFileLinkResolverContext();
   const workspaceRoot = configRef.current.workspaceRoot;
   const tooltipPath = useMemo(
@@ -98,7 +110,18 @@ export function AssistantMarkdownLink({
     </a>
   );
 
-  return <FileLinkHoverTooltip filePath={tooltipPath}>{anchor}</FileLinkHoverTooltip>;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger contextOnly style={FILE_LINK_TOOLTIP_TRIGGER_STYLE}>
+        <FileLinkHoverTooltip filePath={tooltipPath}>{anchor}</FileLinkHoverTooltip>
+      </ContextMenuTrigger>
+      <ContextMenuContent align="start" width={220}>
+        <ContextMenuItem leading={openInEditorLeading} onSelect={onOpenInEditor}>
+          Open in Editor…
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
 }
 
 interface AssistantMarkdownCodeLinkProps {

@@ -16,11 +16,14 @@ import {
   type AssistantFileLinkSource,
 } from "./resolver";
 
+type AssistantFileOpenDisposition = OpenFileDisposition | "editor";
+
 export interface UseFileLinkResult {
   target: InlinePathTarget | null;
   onHoverIn: () => void;
   onPress: () => void;
-  open: (source: AssistantFileLinkSource, disposition: OpenFileDisposition) => void;
+  onOpenInEditor: () => void;
+  open: (source: AssistantFileLinkSource, disposition: AssistantFileOpenDisposition) => void;
 }
 
 export interface AssistantFileLinkActions {
@@ -85,7 +88,7 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
   });
 
   const open = useStableEvent(
-    (nextSource: AssistantFileLinkSource, disposition: OpenFileDisposition) => {
+    (nextSource: AssistantFileLinkSource, disposition: AssistantFileOpenDisposition) => {
       openAssistantFileLink({
         source: nextSource,
         disposition,
@@ -119,6 +122,9 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
   const onPress = useStableEvent(() => {
     open(stableSource, "preferred");
   });
+  const onOpenInEditor = useStableEvent(() => {
+    open(stableSource, "editor");
+  });
 
   const target = useMemo(() => {
     if (resolution.kind === "resolved") {
@@ -127,7 +133,10 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
     return query.data ?? null;
   }, [query.data, resolution]);
 
-  return useMemo(() => ({ target, onHoverIn, onPress, open }), [target, onHoverIn, onPress, open]);
+  return useMemo(
+    () => ({ target, onHoverIn, onPress, onOpenInEditor, open }),
+    [target, onHoverIn, onOpenInEditor, onPress, open],
+  );
 }
 
 export function useAssistantFileLinkActions(): AssistantFileLinkActions {
@@ -155,7 +164,7 @@ export function useAssistantFileLinkActions(): AssistantFileLinkActions {
 
 function openAssistantFileLink(input: {
   source: AssistantFileLinkSource;
-  disposition: OpenFileDisposition;
+  disposition: AssistantFileOpenDisposition;
   context: AssistantFileLinkResolverContextValue;
   queryClient: ReturnType<typeof useQueryClient>;
   formatNoFileFoundMessage: (token: string) => string;
@@ -257,7 +266,7 @@ function assistantFileLinkQueryKey(input: {
 
 async function dispatchResolvedLink(input: {
   resolution: Extract<AssistantFileLinkResolution, { kind: "resolved" }>;
-  disposition: OpenFileDisposition;
+  disposition: AssistantFileOpenDisposition;
   capturedServerId?: string;
   capturedWorkspaceRoot?: string;
   context: AssistantFileLinkResolverContextValue;
@@ -285,7 +294,7 @@ async function dispatchResolvedLink(input: {
 
 async function dispatchFileTarget(input: {
   target: InlinePathTarget;
-  disposition: OpenFileDisposition;
+  disposition: AssistantFileOpenDisposition;
   capturedServerId?: string;
   capturedWorkspaceRoot?: string;
   context: AssistantFileLinkResolverContextValue;
@@ -295,6 +304,10 @@ async function dispatchFileTarget(input: {
     current.serverId !== input.capturedServerId ||
     current.workspaceRoot !== input.capturedWorkspaceRoot
   ) {
+    return;
+  }
+  if (input.disposition === "editor") {
+    current.onOpenWorkspaceFileInEditor?.(input.target);
     return;
   }
   current.onOpenWorkspaceFile?.(input.target, input.disposition);

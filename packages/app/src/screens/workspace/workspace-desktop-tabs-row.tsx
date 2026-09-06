@@ -20,6 +20,7 @@ import {
   Columns2,
   Rows2,
   Ellipsis,
+  ExternalLink,
   Maximize,
   Minimize,
   Plus,
@@ -83,6 +84,8 @@ import {
   useHorizontalScrollBoundary,
 } from "@/components/ui/horizontal-scroll-boundary";
 import { useSessionStore } from "@/stores/session-store";
+import { useWorkspace } from "@/stores/session-store-hooks";
+import { useOpenDirectoryInEditor } from "@/workspace/open-in-editor/directory";
 
 const DROPDOWN_WIDTH = 220;
 const DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH = 36;
@@ -115,6 +118,7 @@ const AGENT_TOOLTIP_TITLE_MAX_LENGTH = 80;
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedX = withUnistyles(X);
 const ThemedCopy = withUnistyles(Copy);
+const ThemedExternalLink = withUnistyles(ExternalLink);
 
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
@@ -403,6 +407,8 @@ function TabContextMenuItem({
     switch (entry.icon) {
       case "copy":
         return <ThemedCopy size={16} uniProps={mutedColorMapping} />;
+      case "external-link":
+        return <ThemedExternalLink size={16} uniProps={mutedColorMapping} />;
       case "rotate-cw":
         return <ThemedRotateCw size={16} uniProps={mutedColorMapping} />;
       case "arrow-left-to-line":
@@ -532,6 +538,8 @@ interface WorkspaceDesktopTabsRowProps {
 
 interface ResolvedWorkspaceDesktopTabsRowProps extends Omit<WorkspaceDesktopTabsRowProps, "tabs"> {
   tabs: ResolvedWorkspaceDesktopTabRowItem[];
+  openFileInEditor: ((path: string) => void) | null;
+  openInEditorLabel: string | null;
 }
 
 interface WorkspaceDesktopTabPresentationSlotProps {
@@ -932,6 +940,16 @@ function TabChip({
 }
 
 export function WorkspaceDesktopTabsRow(props: WorkspaceDesktopTabsRowProps) {
+  const workspace = useWorkspace(props.normalizedServerId, props.normalizedWorkspaceId);
+  const openInEditor = useOpenDirectoryInEditor({
+    serverId: props.normalizedServerId,
+    workspaceDirectory: workspace?.workspaceDirectory ?? "",
+  });
+  const openFileInEditor = useCallback(
+    (path: string) => openInEditor?.openFile({ path }),
+    [openInEditor],
+  );
+  const openInEditorLabel = openInEditor ? `Open in ${openInEditor.targetName}` : null;
   const [presentations, setPresentations] = useState(
     () => new Map<string, WorkspaceTabPresentation>(),
   );
@@ -976,7 +994,12 @@ export function WorkspaceDesktopTabsRow(props: WorkspaceDesktopTabsRowProps) {
 
   return (
     <>
-      <ResolvedWorkspaceDesktopTabsRow {...props} tabs={resolvedTabs} />
+      <ResolvedWorkspaceDesktopTabsRow
+        {...props}
+        tabs={resolvedTabs}
+        openFileInEditor={openInEditor ? openFileInEditor : null}
+        openInEditorLabel={openInEditorLabel}
+      />
       {props.tabs.map(({ tab }) => (
         <WorkspaceDesktopTabPresentationSlot
           key={`${tab.key}:${tab.kind}`}
@@ -1003,6 +1026,8 @@ function ResolvedWorkspaceDesktopTabsRow({
   onCopyAgentId,
   onCopyTerminalId,
   onCopyFilePath,
+  openFileInEditor,
+  openInEditorLabel,
   onReloadAgent,
   onRenameTab,
   onCloseTabsToLeft,
@@ -1259,6 +1284,8 @@ function ResolvedWorkspaceDesktopTabsRow({
           onCopyAgentId={onCopyAgentId}
           onCopyTerminalId={onCopyTerminalId}
           onCopyFilePath={onCopyFilePath}
+          onOpenFileInEditor={openFileInEditor ?? undefined}
+          openInEditorLabel={openInEditorLabel ?? undefined}
           onReloadAgent={onReloadAgent}
           onRenameTab={onRenameTab}
           onCloseTabsToLeft={onCloseTabsToLeft}
@@ -1291,6 +1318,8 @@ function ResolvedWorkspaceDesktopTabsRow({
       onCopyTerminalId,
       onCopyFilePath,
       onCopyResumeCommand,
+      openFileInEditor,
+      openInEditorLabel,
       onNavigateTab,
       onReloadAgent,
       onRenameTab,
@@ -1406,6 +1435,8 @@ function ResolvedDesktopTabChip({
   onCopyAgentId,
   onCopyTerminalId,
   onCopyFilePath,
+  onOpenFileInEditor,
+  openInEditorLabel,
   onReloadAgent,
   onRenameTab,
   onCloseTabsToLeft,
@@ -1432,6 +1463,8 @@ function ResolvedDesktopTabChip({
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
+  onOpenFileInEditor?: (path: string) => Promise<void> | void;
+  openInEditorLabel?: string;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
@@ -1460,6 +1493,8 @@ function ResolvedDesktopTabChip({
         onCopyAgentId,
         onCopyTerminalId,
         onCopyFilePath,
+        onOpenFileInEditor,
+        openInEditorLabel,
         onReloadAgent,
         onRenameTab,
         onCloseTab,
@@ -1479,6 +1514,8 @@ function ResolvedDesktopTabChip({
       onCopyTerminalId,
       onCopyFilePath,
       onCopyResumeCommand,
+      onOpenFileInEditor,
+      openInEditorLabel,
       labels,
       onReloadAgent,
       onRenameTab,

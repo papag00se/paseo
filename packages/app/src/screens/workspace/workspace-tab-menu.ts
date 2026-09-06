@@ -44,6 +44,7 @@ export type WorkspaceTabMenuEntry =
       label: string;
       icon?:
         | "copy"
+        | "external-link"
         | "rotate-cw"
         | "arrow-left-to-line"
         | "arrow-right-to-line"
@@ -72,6 +73,8 @@ interface BuildWorkspaceTabMenuEntriesInput {
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
+  onOpenFileInEditor?: (path: string) => Promise<void> | void;
+  openInEditorLabel?: string;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
@@ -89,6 +92,8 @@ interface BuildWorkspaceDesktopTabActionsInput {
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
+  onOpenFileInEditor?: (path: string) => Promise<void> | void;
+  openInEditorLabel?: string;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
@@ -231,6 +236,18 @@ export function buildWorkspaceTabMenuEntries(
 
   if (tab.target.kind === "file") {
     const filePath = tab.target.path;
+    if (input.onOpenFileInEditor && input.openInEditorLabel) {
+      entries.push({
+        kind: "item",
+        key: "open-file-in-editor",
+        label: input.openInEditorLabel,
+        icon: "external-link",
+        testID: `${menuTestIDBase}-open-in-editor`,
+        onSelect: () => {
+          void input.onOpenFileInEditor?.(filePath);
+        },
+      });
+    }
     entries.push({
       kind: "item",
       key: "copy-file-path",
@@ -337,6 +354,8 @@ export function buildWorkspaceDesktopTabActions(
       onCopyAgentId: input.onCopyAgentId,
       onCopyTerminalId: input.onCopyTerminalId,
       onCopyFilePath: input.onCopyFilePath,
+      onOpenFileInEditor: input.onOpenFileInEditor,
+      openInEditorLabel: input.openInEditorLabel,
       onReloadAgent: input.onReloadAgent,
       onRenameTab: input.onRenameTab,
       onCloseTab: input.onCloseTab,

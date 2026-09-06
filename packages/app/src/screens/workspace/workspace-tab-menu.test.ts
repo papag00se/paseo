@@ -231,8 +231,9 @@ describe("buildWorkspaceTabMenuEntries", () => {
     expect(onRenameTab).toHaveBeenCalledWith(terminalTab);
   });
 
-  it("includes copy file path for file tabs", () => {
+  it("includes external-editor and copy-path actions for file tabs", () => {
     const onCopyFilePath = vi.fn();
+    const onOpenFileInEditor = vi.fn();
     const fileTab: WorkspaceTabDescriptor = {
       key: "file_abc",
       tabId: "file_abc",
@@ -249,6 +250,8 @@ describe("buildWorkspaceTabMenuEntries", () => {
       onCopyAgentId: vi.fn(),
       onCopyTerminalId: vi.fn(),
       onCopyFilePath,
+      onOpenFileInEditor,
+      openInEditorLabel: "Open in VS Code",
       onReloadAgent: vi.fn(),
       onRenameTab: vi.fn(),
       onCloseTab: vi.fn(),
@@ -258,11 +261,20 @@ describe("buildWorkspaceTabMenuEntries", () => {
     });
 
     const labels = entries.filter((entry) => entry.kind === "item").map((entry) => entry.label);
-    expect(labels[0]).toBe("Copy file path");
+    expect(labels.slice(0, 2)).toEqual(["Open in VS Code", "Copy file path"]);
     expect(labels).not.toContain("Copy resume command");
     expect(labels).not.toContain("Copy agent id");
     expect(labels).not.toContain("Rename");
     expect(labels).not.toContain("Reload agent");
+
+    const openInEditorEntry = entries.find(
+      (entry) => entry.kind === "item" && entry.key === "open-file-in-editor",
+    );
+    if (!openInEditorEntry || openInEditorEntry.kind !== "item") {
+      throw new Error("Open in editor entry missing");
+    }
+    openInEditorEntry.onSelect();
+    expect(onOpenFileInEditor).toHaveBeenCalledWith("/some/path.ts");
 
     const copyFilePathEntry = entries.find(
       (entry) => entry.kind === "item" && entry.key === "copy-file-path",
