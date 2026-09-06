@@ -375,7 +375,7 @@ function TreeRowItem({
       </ContextMenuTrigger>
       <FileActionsContextMenuContent
         fileKind={entry.kind}
-        onOpenInEditor={isDirectory && onOpenInEditor ? handleOpenInEditor : undefined}
+        onOpenInEditor={onOpenInEditor ? handleOpenInEditor : undefined}
         editorTargetName={editorTargetName}
         onCopyPath={handleCopy}
         onCopyRelativePath={handleCopyRelativePath}
@@ -623,8 +623,11 @@ export function FileExplorerPane({
     [fileManagerTarget, normalizedWorkspaceRoot, t, toast],
   );
 
-  const handleOpenDirectoryInEditor = useCallback(
-    (entry: ExplorerEntry) => openDirectoryInEditor?.open(entry.path),
+  const handleOpenInEditor = useCallback(
+    (entry: ExplorerEntry) => {
+      if (entry.kind === "directory") openDirectoryInEditor?.open(entry.path);
+      else openDirectoryInEditor?.openFile({ path: entry.path });
+    },
     [openDirectoryInEditor],
   );
 
@@ -979,7 +982,7 @@ export function FileExplorerPane({
           onSelectEntry={handleSelectEntry}
           onCopyPath={handleCopyPath}
           onCopyRelativePath={handleCopyRelativePath}
-          onOpenInEditor={openDirectoryInEditor ? handleOpenDirectoryInEditor : undefined}
+          onOpenInEditor={openDirectoryInEditor ? handleOpenInEditor : undefined}
           editorTargetName={openDirectoryInEditor?.targetName}
           onRevealEntry={fileManagerTarget ? handleRevealEntry : undefined}
           revealTargetName={fileManagerTarget?.label}
@@ -1001,7 +1004,7 @@ export function FileExplorerPane({
       handleCollapseDirectory,
       handleCopyPath,
       handleCopyRelativePath,
-      handleOpenDirectoryInEditor,
+      handleOpenInEditor,
       handleDeleteEntry,
       handleDownloadEntry,
       handleDraftCommit,

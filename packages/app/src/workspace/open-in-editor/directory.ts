@@ -4,6 +4,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-preferred-editor";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
+import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import { planWorkspaceOpenTargets } from "@/workspace/open-in-editor/planner";
 
 interface UseOpenDirectoryInEditorInput {
@@ -14,6 +15,7 @@ interface UseOpenDirectoryInEditorInput {
 interface OpenDirectoryInEditorAction {
   targetName: string;
   open: (directoryPath: string) => void;
+  openFile: (file: WorkspaceFileLocation) => void;
 }
 
 export function useOpenDirectoryInEditor({
@@ -37,14 +39,14 @@ export function useOpenDirectoryInEditor({
     return editorTargets.find((target) => target.id === preferredId) ?? null;
   }, [editorTargets, preferredEditorId]);
 
-  const open = useCallback(
-    (directoryPath: string) => {
+  const openTarget = useCallback(
+    (input: { directoryPath?: string; activeFile?: WorkspaceFileLocation }) => {
       if (!preferredTarget) {
         return;
       }
       const target = planWorkspaceOpenTargets({
         workspaceDirectory,
-        directoryPath,
+        ...input,
         desktopTargets: [preferredTarget],
         canUseDesktopBridge: isAvailable,
         isLocalExecution,
@@ -61,8 +63,21 @@ export function useOpenDirectoryInEditor({
     [isAvailable, isLocalExecution, preferredTarget, t, toast, workspaceDirectory],
   );
 
+  const open = useCallback(
+    (directoryPath: string) => {
+      openTarget({ directoryPath });
+    },
+    [openTarget],
+  );
+  const openFile = useCallback(
+    (file: WorkspaceFileLocation) => {
+      openTarget({ activeFile: file });
+    },
+    [openTarget],
+  );
+
   return useMemo(
-    () => (preferredTarget ? { targetName: preferredTarget.label, open } : null),
-    [open, preferredTarget],
+    () => (preferredTarget ? { targetName: preferredTarget.label, open, openFile } : null),
+    [open, openFile, preferredTarget],
   );
 }

@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useState,
   type ReactElement,
+  type ReactNode,
   type Ref,
 } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
@@ -12,7 +13,6 @@ import {
   ChevronDown,
   ChevronRight,
   FolderPlus,
-  GripVertical,
   MoreVertical,
   Pencil,
   Trash2,
@@ -43,7 +43,6 @@ import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
-const ThemedGripVertical = withUnistyles(GripVertical);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedTrash2 = withUnistyles(Trash2);
@@ -79,18 +78,13 @@ export function NewProjectGroupButton(): ReactElement {
   );
 }
 
-function ProjectGroupDragHandle({
-  id,
-  name,
-  drag,
+function ProjectGroupDraggableRow({
   dragHandleProps,
+  children,
 }: {
-  id: string;
-  name: string;
-  drag?: () => void;
   dragHandleProps?: DraggableListDragHandleProps;
-}): ReactElement | null {
-  if (!drag) return null;
+  children: ReactNode;
+}): ReactElement {
   const {
     role: _dragRole,
     tabIndex: _dragTabIndex,
@@ -102,18 +96,9 @@ function ProjectGroupDragHandle({
       {...dragAttributes}
       {...dragHandleProps?.listeners}
       ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
+      style={styles.groupRow}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Reorder ${name}`}
-        delayLongPress={200}
-        hitSlop={6}
-        onLongPress={drag}
-        style={styles.groupDragHandle}
-        testID={`sidebar-project-group-drag-${id}`}
-      >
-        <ThemedGripVertical size={14} uniProps={mutedMapping} />
-      </Pressable>
+      {children}
     </View>
   );
 }
@@ -167,18 +152,12 @@ export function ProjectGroupBlock({
       accessibilityLabel={name}
       style={[styles.groupBlock, isDragging && styles.groupBlockDragging]}
     >
-      <View style={styles.groupRow}>
-        {group ? (
-          <ProjectGroupDragHandle
-            id={id}
-            name={name}
-            drag={drag}
-            dragHandleProps={dragHandleProps}
-          />
-        ) : null}
+      <ProjectGroupDraggableRow dragHandleProps={group ? dragHandleProps : undefined}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${collapsed ? "Expand" : "Collapse"} ${name}`}
+          delayLongPress={200}
+          onLongPress={group ? drag : undefined}
           onPress={handleToggle}
           style={groupMainStyle}
           testID={`sidebar-project-group-${id}`}
@@ -226,7 +205,7 @@ export function ProjectGroupBlock({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-      </View>
+      </ProjectGroupDraggableRow>
       {collapsed ? null : <View style={styles.groupChildren}>{children}</View>}
     </View>
   );
@@ -454,12 +433,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     flexDirection: "row",
     alignItems: "center",
-  },
-  groupDragHandle: {
-    width: 22,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
   },
   groupMain: {
     flex: 1,
