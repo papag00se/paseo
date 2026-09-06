@@ -54,6 +54,7 @@ import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useSessionStore } from "@/stores/session-store";
 import { useRevealedText } from "@/hooks/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
+import { useOpenDirectoryInEditor } from "@/workspace/open-in-editor/directory";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
 import type { ToastApi } from "@/components/toast-host";
@@ -397,6 +398,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     );
 
     const workspaceRoot = context.cwd?.trim() || "";
+    const openInEditor = useOpenDirectoryInEditor({
+      serverId: resolvedServerId,
+      workspaceDirectory: workspaceRoot,
+    });
+    const handleOpenFileInEditor = useCallback(
+      (target: InlinePathTarget) => openInEditor?.openFile(target),
+      [openInEditor],
+    );
     const { requestDirectoryListing } = useFileExplorerActions({
       serverId: resolvedServerId,
       workspaceId: context.workspaceId,
@@ -720,6 +729,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             serverId={resolvedServerId}
             workspaceRoot={workspaceRoot}
             onOpenWorkspaceFile={handleInlinePathPress}
+            onOpenWorkspaceFileInEditor={handleOpenFileInEditor}
             toast={toast}
           >
             <ChatFindExpansion messageId={getStreamItemMessageId(item)}>
@@ -740,7 +750,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           </AssistantFileLinkResolverProvider>
         );
       },
-      [agentId, client, handleInlinePathPress, resolvedServerId, toast, workspaceRoot],
+      [
+        agentId,
+        client,
+        handleInlinePathPress,
+        handleOpenFileInEditor,
+        resolvedServerId,
+        toast,
+        workspaceRoot,
+      ],
     );
 
     const renderThoughtItem = useCallback(

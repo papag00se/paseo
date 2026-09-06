@@ -100,7 +100,7 @@ export function FileActionsContextMenuContent({
   const { t } = useTranslation();
   const openInEditorAction = useMemo<FileAction | null>(
     () =>
-      fileKind === "directory" && onOpenInEditor && editorTargetName
+      onOpenInEditor && editorTargetName
         ? {
             key: "open-in-editor",
             group: "open",
@@ -109,7 +109,7 @@ export function FileActionsContextMenuContent({
             onSelect: onOpenInEditor,
           }
         : null,
-    [editorTargetName, fileKind, onOpenInEditor, t],
+    [editorTargetName, onOpenInEditor, t],
   );
   const actions = useMemo<FileAction[]>(() => {
     const availableFile = fileKind === "file" && fileExists;
