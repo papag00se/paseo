@@ -87,6 +87,21 @@ function createInput(
         status: "idle",
         handler: () => undefined,
       },
+      "commit-staged": {
+        disabled: false,
+        status: "idle",
+        handler: () => undefined,
+      },
+      "stage-all": {
+        disabled: false,
+        status: "idle",
+        handler: () => undefined,
+      },
+      "unstage-all": {
+        disabled: false,
+        status: "idle",
+        handler: () => undefined,
+      },
       pull: {
         disabled: false,
         status: "idle",
@@ -171,7 +186,12 @@ describe("git-actions-policy", () => {
     const actions = buildGitActions(createInput({ hasRemote: true }));
 
     expect(actions.primary).toBeNull();
-    expect(actions.secondary.map((action) => action.id)).toEqual([
+    expect(actions.secondary.slice(0, 3).map((action) => action.id)).toEqual([
+      "commit-staged",
+      "stage-all",
+      "unstage-all",
+    ]);
+    expect(actions.secondary.slice(3).map((action) => action.id)).toEqual([
       "pull",
       "push",
       "pull-and-push",
@@ -298,7 +318,7 @@ describe("git-actions-policy", () => {
       }),
     );
 
-    expect(actions.secondary.map((action) => action.id)).toEqual([
+    expect(actions.secondary.slice(3).map((action) => action.id)).toEqual([
       "pull",
       "push",
       "pull-and-push",
@@ -649,7 +669,7 @@ describe("git-actions-policy", () => {
       }),
     );
 
-    expect(actions.secondary.map((action) => action.id)).toEqual([
+    expect(actions.secondary.slice(3).map((action) => action.id)).toEqual([
       "pull",
       "push",
       "pull-and-push",
@@ -826,7 +846,7 @@ describe("git-actions-policy", () => {
       id: "merge-pr-squash",
       label: "Merge PR (squash)",
     });
-    expect(actions.secondary.map((action) => action.id)).toEqual([
+    expect(actions.secondary.slice(3).map((action) => action.id)).toEqual([
       "pull",
       "push",
       "pull-and-push",
@@ -869,7 +889,7 @@ describe("git-actions-policy", () => {
       id: "enable-pr-auto-merge-squash",
       label: "Auto merge (squash)",
     });
-    expect(actions.secondary.map((action) => action.id)).toEqual([
+    expect(actions.secondary.slice(3).map((action) => action.id)).toEqual([
       "pull",
       "push",
       "pull-and-push",
@@ -1012,7 +1032,7 @@ describe("git-actions-policy", () => {
       id: "merge-pr-merge",
       label: "Merge PR (merge)",
     });
-    expect(actions.secondary.map((action) => action.id)).toEqual([
+    expect(actions.secondary.slice(3).map((action) => action.id)).toEqual([
       "pull",
       "push",
       "pull-and-push",
@@ -1076,6 +1096,9 @@ describe("git-actions-policy", () => {
 
     expect(groupStarters).toEqual(["merge-from-base", "merge-pr-squash", "archive-workspace"]);
     expect(nonGroupStarters).toEqual([
+      "commit-staged",
+      "stage-all",
+      "unstage-all",
       "pull",
       "push",
       "pull-and-push",

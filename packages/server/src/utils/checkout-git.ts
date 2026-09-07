@@ -63,6 +63,7 @@ export type GitMutationRefreshReason =
   | "stash-push"
   | "stash-pop"
   | "discard-changes"
+  | "update-index"
   | "create-worktree";
 
 const DISCARD_CHANGES_TIMEOUT_MS = 120_000;
@@ -3263,6 +3264,29 @@ async function resolveCheckoutDiffRefs(
   };
 }
 
+async function getCheckoutIndexStateByPath(
+  cwd: string,
+): Promise<Map<string, { hasStagedChanges: boolean; hasUnstagedChanges: boolean }>> {
+  const { stdout } = await runGitCommand(["status", "--porcelain=v1", "-z"], { cwd });
+  const states = new Map<string, { hasStagedChanges: boolean; hasUnstagedChanges: boolean }>();
+  const tokens = stdout.split("\0");
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.length < 4) continue;
+    const indexStatus = token[0] ?? " ";
+    const worktreeStatus = token[1] ?? " ";
+    const path = token.slice(3);
+    states.set(path, {
+      hasStagedChanges: indexStatus !== " " && indexStatus !== "?",
+      hasUnstagedChanges: worktreeStatus !== " " || indexStatus === "?",
+    });
+    if (indexStatus === "R" || indexStatus === "C") {
+      index += 1;
+    }
+  }
+  return states;
+}
+
 export async function getCheckoutDiff(
   cwd: string,
   compare: CheckoutDiffCompare,
@@ -3374,6 +3398,14 @@ export async function getCheckoutDiff(
   }
 
   if (compare.includeStructured) {
+    if (compare.mode === "uncommitted") {
+      const indexStateByPath = await getCheckoutIndexStateByPath(cwd);
+      for (const file of structured.files) {
+        const state = indexStateByPath.get(file.path);
+        file.hasStagedChanges = state?.hasStagedChanges ?? false;
+        file.hasUnstagedChanges = state?.hasUnstagedChanges ?? false;
+      }
+    }
     return { diff: diffText, structured: structured.files };
   }
   return { diff: diffText };
@@ -3395,6 +3427,47 @@ export async function commitChanges(
 
 export async function commitAll(cwd: string, message: string): Promise<void> {
   await commitChanges(cwd, { message, addAll: true });
+}
+
+export async function updateCheckoutIndex(
+  cwd: string,
+  operation: "stage" | "unstage",
+  pathspecs: string[],
+): Promise<void> {
+  await requireGitRepo(cwd);
+  if (operation === "stage") {
+    const args =
+      pathspecs.length > 0
+        ? ["--literal-pathspecs", "add", "-A", "--", ...pathspecs]
+        : ["add", "-A"];
+    await runGitCommand(args, { cwd, timeout: DISCARD_CHANGES_TIMEOUT_MS });
+    return;
+  }
+
+  const resetArgs =
+    pathspecs.length > 0
+      ? ["--literal-pathspecs", "reset", "-q", "HEAD", "--", ...pathspecs]
+      : ["reset", "-q", "HEAD"];
+  try {
+    await runGitCommand(resetArgs, { cwd, timeout: DISCARD_CHANGES_TIMEOUT_MS });
+  } catch {
+    // An unborn repository has no HEAD. Removing entries from the index is the
+    // equivalent of unstaging while preserving every worktree file.
+    const rmArgs =
+      pathspecs.length > 0
+        ? [
+            "--literal-pathspecs",
+            "rm",
+            "--cached",
+            "-r",
+            "-q",
+            "--ignore-unmatch",
+            "--",
+            ...pathspecs,
+          ]
+        : ["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", "."];
+    await runGitCommand(rmArgs, { cwd, timeout: DISCARD_CHANGES_TIMEOUT_MS });
+  }
 }
 
 export async function discardChanges(cwd: string, pathspecs: string[]): Promise<void> {

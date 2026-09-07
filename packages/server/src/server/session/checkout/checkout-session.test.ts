@@ -525,6 +525,49 @@ describe("CheckoutSession", () => {
     });
   });
 
+  describe("index updates", () => {
+    it("stages selected paths and publishes the mutation", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "checkout-session-index-"));
+      const cwd = realpathSync(tempDir);
+      try {
+        execFileSync("git", ["init", "-q"], { cwd });
+        execFileSync("git", ["config", "user.email", "test@example.com"], { cwd });
+        execFileSync("git", ["config", "user.name", "Test User"], { cwd });
+        writeFileSync(join(cwd, "file.txt"), "new\n");
+        const { subscriber, refreshedCwds } = createFakeDiffSubscriber({
+          cwd: "",
+          files: [],
+          error: null,
+        });
+        const { checkout, emitted, gitMutationCalls } = makeCheckoutSession({ diff: subscriber });
+
+        await checkout.handleCheckoutIndexUpdateRequest({
+          type: "checkout.index.update.request",
+          cwd,
+          operation: "stage",
+          paths: ["file.txt"],
+          requestId: "stage-1",
+        });
+
+        expect(execFileSync("git", ["diff", "--cached", "--name-only"], { cwd }).toString()).toBe(
+          "file.txt\n",
+        );
+        expect(gitMutationCalls.notifyGitMutation).toEqual([
+          { cwd, reason: "update-index", options: undefined },
+        ]);
+        expect(refreshedCwds).toEqual([cwd]);
+        expect(emitted).toEqual([
+          {
+            type: "checkout.index.update.response",
+            payload: { cwd, success: true, error: null, requestId: "stage-1" },
+          },
+        ]);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe("diff subscriptions", () => {
     it("opens a subscription, streams updates tagged with the id, and tears down on unsubscribe", async () => {
       const { subscriber, subscriptions } = createFakeDiffSubscriber({

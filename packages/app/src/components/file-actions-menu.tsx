@@ -12,6 +12,8 @@ import {
   FolderOpen,
   FolderPlus,
   MessageSquarePlus,
+  ListMinus,
+  ListPlus,
   Pencil,
   Trash2,
   Undo2,
@@ -66,6 +68,8 @@ interface FileActionsContextMenuContentProps {
   onCollapseFolder?: () => void;
   onRename?: () => void;
   onDuplicate?: () => void;
+  onStage?: () => void;
+  onUnstage?: () => void;
   onRevert?: () => void;
   onDelete?: () => void;
   testIDPrefix?: string;
@@ -93,6 +97,8 @@ export function FileActionsContextMenuContent({
   onCollapseFolder,
   onRename,
   onDuplicate,
+  onStage,
+  onUnstage,
   onRevert,
   onDelete,
   testIDPrefix,
@@ -202,6 +208,18 @@ export function FileActionsContextMenuContent({
             onSelect: onAddToChat,
           }
         : null,
+      optionalFileAction(true, onStage, {
+        key: "stage",
+        group: "manage",
+        label: "Stage changes",
+        icon: ListPlus,
+      }),
+      optionalFileAction(true, onUnstage, {
+        key: "unstage",
+        group: "manage",
+        label: "Unstage changes",
+        icon: ListMinus,
+      }),
       onRename
         ? {
             key: "rename",
@@ -266,6 +284,8 @@ export function FileActionsContextMenuContent({
     onRename,
     onReveal,
     onRevert,
+    onStage,
+    onUnstage,
     revealTargetName,
     t,
     testIDPrefix,
