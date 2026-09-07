@@ -174,6 +174,50 @@ function useDiscardChangesAction({
   return discardSupported && diffMode === "uncommitted" ? handleDiscardPath : undefined;
 }
 
+function useIndexPathActions({
+  serverId,
+  cwd,
+  diffMode,
+}: {
+  serverId: string;
+  cwd: string;
+  diffMode: "uncommitted" | "base";
+}): {
+  stage: (path: string, oldPath?: string) => void;
+  unstage: (path: string, oldPath?: string) => void;
+} | null {
+  const toast = useToast();
+  const updateIndex = useCheckoutGitActionsStore((state) => state.updateIndex);
+  const supported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.checkoutIndexActions === true,
+  );
+  const updatePath = useCallback(
+    (operation: "stage" | "unstage", path: string, oldPath?: string) => {
+      void updateIndex({
+        serverId,
+        cwd,
+        operation,
+        paths: oldPath ? [path, oldPath] : [path],
+      }).catch((cause) => {
+        toast.error(cause instanceof Error ? cause.message : `Failed to ${operation} changes`);
+      });
+    },
+    [cwd, serverId, toast, updateIndex],
+  );
+  const stage = useCallback(
+    (path: string, oldPath?: string) => updatePath("stage", path, oldPath),
+    [updatePath],
+  );
+  const unstage = useCallback(
+    (path: string, oldPath?: string) => updatePath("unstage", path, oldPath),
+    [updatePath],
+  );
+  return useMemo(
+    () => (supported && diffMode === "uncommitted" ? { stage, unstage } : null),
+    [diffMode, stage, supported, unstage],
+  );
+}
+
 interface ChangesSurfaceProps {
   serverId: string;
   workspaceId?: string | null;
@@ -1665,6 +1709,7 @@ export function ChangesSurface({
     [client, cwd, t, toast],
   );
   const onRevertPath = useDiscardChangesAction({ serverId, cwd, diffMode });
+  const indexPathActions = useIndexPathActions({ serverId, cwd, diffMode });
   const [localFocusRequest, setLocalFocusRequest] = useState<{
     path: string;
     revision: number;
@@ -1707,6 +1752,8 @@ export function ChangesSurface({
       revealTargetName: fileManagerTarget?.label,
       onDownload: handleDownloadPath,
       onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
+      onStage: indexPathActions?.stage,
+      onUnstage: indexPathActions?.unstage,
       onRevert: onRevertPath,
     }),
     [
@@ -1725,6 +1772,7 @@ export function ChangesSurface({
       handleRevealPath,
       fileManagerTarget,
       fsEntryDuplicateEnabled,
+      indexPathActions,
       onRevertPath,
     ],
   );

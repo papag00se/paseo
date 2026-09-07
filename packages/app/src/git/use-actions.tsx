@@ -81,6 +81,18 @@ function openURLInNewTab(url: string): void {
   void openExternalUrl(url);
 }
 
+function requestCommitMessage(requireMessage: boolean): string | null {
+  const prompt = Reflect.get(globalThis, "prompt");
+  if (typeof prompt !== "function") {
+    return requireMessage ? null : "";
+  }
+  const label = requireMessage
+    ? "Commit message for staged changes:"
+    : "Commit message (leave blank to let Paseo generate one):";
+  const result = prompt(label, "") as unknown;
+  return typeof result === "string" ? result.trim() : null;
+}
+
 function isActionDisabled(actionsDisabled: boolean, status: CheckoutGitActionStatus): boolean {
   return actionsDisabled || status === "pending";
 }
@@ -399,6 +411,12 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   const commitStatus = useCheckoutGitActionsStore((s) =>
     s.getStatus({ serverId, cwd, actionId: "commit" }),
   );
+  const stageStatus = useCheckoutGitActionsStore((s) =>
+    s.getStatus({ serverId, cwd, actionId: "stage" }),
+  );
+  const unstageStatus = useCheckoutGitActionsStore((s) =>
+    s.getStatus({ serverId, cwd, actionId: "unstage" }),
+  );
   const pullStatus = useCheckoutGitActionsStore((s) =>
     s.getStatus({ serverId, cwd, actionId: "pull" }),
   );
@@ -444,6 +462,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   );
 
   const runCommit = useCheckoutGitActionsStore((s) => s.commit);
+  const updateIndex = useCheckoutGitActionsStore((s) => s.updateIndex);
   const runPull = useCheckoutGitActionsStore((s) => s.pull);
   const runPush = useCheckoutGitActionsStore((s) => s.push);
   const runPullAndPush = useCheckoutGitActionsStore((s) => s.pullAndPush);
@@ -453,6 +472,9 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   const runDisablePrAutoMerge = useCheckoutGitActionsStore((s) => s.disablePrAutoMerge);
   const runMergeBranch = useCheckoutGitActionsStore((s) => s.mergeBranch);
   const runMergeFromBase = useCheckoutGitActionsStore((s) => s.mergeFromBase);
+  const checkoutIndexActionsEnabled = useSessionStore(
+    (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutIndexActions === true,
+  );
   const githubAutoMergeActionsEnabled = useSessionStore(
     (s) =>
       s.sessions[serverId]?.serverInfo?.features?.checkoutForgeSetAutoMerge === true ||
@@ -475,16 +497,37 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   );
 
   // Handlers
-  const handleCommit = useCallback(() => {
-    void runCommit({ serverId, cwd })
-      .then(() => {
-        toastActionSuccess(t("workspace.git.actions.commit.success"));
+  const commit = useCallback(
+    (addAll: boolean) => {
+      const message = requestCommitMessage(!addAll);
+      if (message === null) return;
+      if (!addAll && !message) {
+        toast.error("Enter a commit message for staged changes.");
         return;
-      })
-      .catch((err) => {
-        toastActionError(err, t("workspace.git.actions.toasts.failedCommit"));
-      });
-  }, [cwd, runCommit, serverId, t, toastActionError, toastActionSuccess]);
+      }
+      void runCommit({ serverId, cwd, addAll, message: message || undefined })
+        .then(() => {
+          toastActionSuccess(t("workspace.git.actions.commit.success"));
+          return;
+        })
+        .catch((err) => {
+          toastActionError(err, t("workspace.git.actions.toasts.failedCommit"));
+        });
+    },
+    [cwd, runCommit, serverId, t, toast, toastActionError, toastActionSuccess],
+  );
+  const handleCommit = useCallback(() => commit(true), [commit]);
+  const handleCommitStaged = useCallback(() => commit(false), [commit]);
+  const handleStageAll = useCallback(() => {
+    void updateIndex({ serverId, cwd, operation: "stage", paths: [] }).catch((err) => {
+      toastActionError(err, "Failed to stage changes");
+    });
+  }, [cwd, serverId, toastActionError, updateIndex]);
+  const handleUnstageAll = useCallback(() => {
+    void updateIndex({ serverId, cwd, operation: "unstage", paths: [] }).catch((err) => {
+      toastActionError(err, "Failed to unstage changes");
+    });
+  }, [cwd, serverId, toastActionError, updateIndex]);
 
   const handlePull = useCallback(() => {
     void runPull({ serverId, cwd })
@@ -711,6 +754,25 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
           icon: icons.commit,
           handler: handleCommit,
         },
+        "commit-staged": {
+          disabled: !checkoutIndexActionsEnabled || isActionDisabled(actionsDisabled, commitStatus),
+          status: commitStatus,
+          icon: icons.commit,
+          handler: handleCommitStaged,
+        },
+        "stage-all": {
+          disabled: !checkoutIndexActionsEnabled || isActionDisabled(actionsDisabled, stageStatus),
+          status: stageStatus,
+          icon: icons.commit,
+          handler: handleStageAll,
+        },
+        "unstage-all": {
+          disabled:
+            !checkoutIndexActionsEnabled || isActionDisabled(actionsDisabled, unstageStatus),
+          status: unstageStatus,
+          icon: icons.commit,
+          handler: handleUnstageAll,
+        },
         pull: {
           disabled: isActionDisabled(actionsDisabled, pullStatus),
           status: pullStatus,
@@ -822,7 +884,10 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     baseRefLabel,
     shouldPromoteArchive,
     actionsDisabled,
+    checkoutIndexActionsEnabled,
     commitStatus,
+    stageStatus,
+    unstageStatus,
     pullStatus,
     pushStatus,
     pullAndPushStatus,
@@ -839,6 +904,9 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     archiveController.canArchive,
     archiveController.isArchiving,
     handleCommit,
+    handleCommitStaged,
+    handleStageAll,
+    handleUnstageAll,
     handlePull,
     handlePush,
     handlePullAndPush,
@@ -929,6 +997,14 @@ function getTranslatedGitActionLabels(
         label: t("workspace.git.actions.commit.label"),
         pendingLabel: t("workspace.git.actions.commit.pending"),
         successLabel: t("workspace.git.actions.commit.success"),
+      };
+    case "commit-staged":
+    case "stage-all":
+    case "unstage-all":
+      return {
+        label: action.label,
+        pendingLabel: action.pendingLabel,
+        successLabel: action.successLabel,
       };
     case "pull":
       return {

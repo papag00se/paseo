@@ -25,7 +25,9 @@ export type CheckoutGitAsyncActionId =
   | "disable-pr-auto-merge"
   | "merge-branch"
   | "merge-from-base"
-  | "discard-changes";
+  | "discard-changes"
+  | "stage"
+  | "unstage";
 
 type CheckoutKey = string;
 type StatusMap = Partial<Record<CheckoutGitAsyncActionId, CheckoutGitActionStatus>>;
@@ -102,7 +104,12 @@ interface CheckoutGitActionsStoreState {
     actionId: CheckoutGitAsyncActionId;
   }) => CheckoutGitActionStatus;
 
-  commit: (params: { serverId: string; cwd: string }) => Promise<void>;
+  commit: (params: {
+    serverId: string;
+    cwd: string;
+    message?: string;
+    addAll?: boolean;
+  }) => Promise<void>;
   pull: (params: { serverId: string; cwd: string }) => Promise<void>;
   push: (params: { serverId: string; cwd: string }) => Promise<void>;
   pullAndPush: (params: { serverId: string; cwd: string }) => Promise<void>;
@@ -122,6 +129,12 @@ interface CheckoutGitActionsStoreState {
   mergeBranch: (params: { serverId: string; cwd: string; baseRef: string }) => Promise<void>;
   mergeFromBase: (params: { serverId: string; cwd: string; baseRef: string }) => Promise<void>;
   discardChanges: (params: { serverId: string; cwd: string; paths: string[] }) => Promise<void>;
+  updateIndex: (params: {
+    serverId: string;
+    cwd: string;
+    operation: "stage" | "unstage";
+    paths: string[];
+  }) => Promise<void>;
 }
 
 async function runCheckoutAction({
@@ -182,14 +195,14 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
     return get().statusByCheckout[key]?.[actionId] ?? "idle";
   },
 
-  commit: async ({ serverId, cwd }) => {
+  commit: async ({ serverId, cwd, message, addAll = true }) => {
     await runCheckoutAction({
       serverId,
       cwd,
       actionId: "commit",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutCommit(cwd, { addAll: true });
+        const payload = await client.checkoutCommit(cwd, { addAll, message });
         if (payload.error) {
           throw new Error(payload.error.message);
         }
@@ -367,6 +380,21 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
         });
         if (payload.error) {
           throw new Error(payload.error.message);
+        }
+      },
+    });
+  },
+
+  updateIndex: async ({ serverId, cwd, operation, paths }) => {
+    await runCheckoutAction({
+      serverId,
+      cwd,
+      actionId: operation,
+      run: async () => {
+        const client = resolveClient(serverId);
+        const payload = await client.checkoutUpdateIndex(cwd, { operation, paths });
+        if (!payload.success) {
+          throw new Error(payload.error?.message ?? `Failed to ${operation} changes`);
         }
       },
     });
