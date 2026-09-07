@@ -8,6 +8,9 @@ import type { MergeCapability } from "./merge-capability";
 
 export type GitActionId =
   | "commit"
+  | "commit-staged"
+  | "stage-all"
+  | "unstage-all"
   | "pull"
   | "push"
   | "pull-and-push"
@@ -207,6 +210,42 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
     handler: input.runtime.commit.handler,
   });
 
+  allActions.set("commit-staged", {
+    id: "commit-staged",
+    label: "Commit staged…",
+    pendingLabel: "Committing staged changes…",
+    successLabel: "Committed staged changes",
+    disabled: input.runtime["commit-staged"].disabled,
+    status: input.runtime["commit-staged"].status,
+    icon: input.runtime["commit-staged"].icon,
+    startsGroup: false,
+    handler: input.runtime["commit-staged"].handler,
+  });
+
+  allActions.set("stage-all", {
+    id: "stage-all",
+    label: "Stage all changes",
+    pendingLabel: "Staging changes…",
+    successLabel: "Staged all changes",
+    disabled: input.runtime["stage-all"].disabled,
+    status: input.runtime["stage-all"].status,
+    icon: input.runtime["stage-all"].icon,
+    startsGroup: false,
+    handler: input.runtime["stage-all"].handler,
+  });
+
+  allActions.set("unstage-all", {
+    id: "unstage-all",
+    label: "Unstage all changes",
+    pendingLabel: "Unstaging changes…",
+    successLabel: "Unstaged all changes",
+    disabled: input.runtime["unstage-all"].disabled,
+    status: input.runtime["unstage-all"].status,
+    icon: input.runtime["unstage-all"].icon,
+    startsGroup: false,
+    handler: input.runtime["unstage-all"].handler,
+  });
+
   allActions.set("pull", {
     id: "pull",
     label: i18n.t("workspace.git.actions.pull.label"),
@@ -297,7 +336,12 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
   const primaryActionId = getPrimaryActionId(input);
   const primary = primaryActionId ? (allActions.get(primaryActionId) ?? null) : null;
 
-  const secondaryIds = [...REMOTE_ACTION_IDS];
+  const secondaryIds: GitActionId[] = [
+    "commit-staged",
+    "stage-all",
+    "unstage-all",
+    ...REMOTE_ACTION_IDS,
+  ];
   if (!input.isOnBaseBranch) {
     secondaryIds.push(...getFeatureActionIds(input));
   }

@@ -4496,6 +4496,15 @@ export class DaemonClient {
     });
   }
 
+  async checkoutUpdateIndex(
+    cwd: string,
+    input: { operation: "stage" | "unstage"; paths: string[] },
+  ): Promise<CorrelatedResponsePayload<"checkout.index.update.response">> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.index.update.response">({
+      message: { type: "checkout.index.update.request", cwd, ...input },
+    });
+  }
+
   async uploadFile(input: FileUploadInput): Promise<FileUploadResult> {
     const bytes = asUint8Array(input.bytes);
     if (!bytes) {

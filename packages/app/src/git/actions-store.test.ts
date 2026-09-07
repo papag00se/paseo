@@ -73,6 +73,51 @@ describe("checkout-git-actions-store", () => {
     expect(store.getStatus({ serverId, cwd, actionId: "commit" })).toBe("idle");
   });
 
+  it("forwards commit message and staged-only mode", async () => {
+    const checkoutCommit = vi.fn(async () => ({}));
+    const client = { checkoutCommit };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await useCheckoutGitActionsStore
+      .getState()
+      .commit({ serverId, cwd, message: "Focused commit", addAll: false });
+
+    expect(checkoutCommit).toHaveBeenCalledWith(cwd, {
+      message: "Focused commit",
+      addAll: false,
+    });
+  });
+
+  it("stages selected paths through the checkout index RPC", async () => {
+    const checkoutUpdateIndex = vi.fn(async () => ({ success: true, error: null }));
+    const client = { checkoutUpdateIndex };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await useCheckoutGitActionsStore.getState().updateIndex({
+      serverId,
+      cwd,
+      operation: "stage",
+      paths: ["src/a.ts"],
+    });
+
+    expect(checkoutUpdateIndex).toHaveBeenCalledWith(cwd, {
+      operation: "stage",
+      paths: ["src/a.ts"],
+    });
+  });
+
   it("runs pull then push sequentially for pull-and-push", async () => {
     const order: string[] = [];
     const client = {

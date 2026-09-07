@@ -43,6 +43,7 @@ import {
   commitChanges,
   createPullRequest,
   discardChanges,
+  updateCheckoutIndex,
   forgeAuthStateFromError,
   isForgeAuthError,
   mergeFromBase,
@@ -626,6 +627,26 @@ export class CheckoutSession {
     } catch (error) {
       this.host.emit({
         type: "checkout.discard_changes.response",
+        payload: { cwd, success: false, error: toCheckoutError(error), requestId },
+      });
+    }
+  }
+
+  async handleCheckoutIndexUpdateRequest(
+    msg: Extract<SessionInboundMessage, { type: "checkout.index.update.request" }>,
+  ): Promise<void> {
+    const { cwd, operation, paths, requestId } = msg;
+    try {
+      await updateCheckoutIndex(cwd, operation, paths);
+      await this.gitMutation.notifyGitMutation(cwd, "update-index");
+      this.scheduleDiffRefresh(cwd);
+      this.host.emit({
+        type: "checkout.index.update.response",
+        payload: { cwd, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.index.update.response",
         payload: { cwd, success: false, error: toCheckoutError(error), requestId },
       });
     }

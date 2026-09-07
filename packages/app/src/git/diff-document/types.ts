@@ -28,6 +28,8 @@ export interface WorkingDiffMode {
   revealTargetName?: string;
   onDownload?: (path: string) => void;
   onDuplicate?: (path: string) => void;
+  onStage?: (path: string, oldPath?: string) => void;
+  onUnstage?: (path: string, oldPath?: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
 }
 

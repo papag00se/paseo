@@ -46,6 +46,7 @@ import {
   isPaseoWorktreePath,
   isDescendantPath,
   warmCheckoutShortstatInBackground,
+  updateCheckoutIndex,
 } from "./checkout-git.js";
 import { startGitCommandMetrics, stopGitCommandMetrics } from "./run-git-command.js";
 import { createForgeResolver } from "../services/forge-resolver.js";
@@ -428,6 +429,8 @@ describe("checkout git utilities", () => {
           },
         ],
         status: "ok",
+        hasStagedChanges: false,
+        hasUnstagedChanges: true,
       },
     ]);
   });
@@ -527,6 +530,25 @@ describe("checkout git utilities", () => {
     writeFileSync(join(repoDir, "file.txt"), "signed\n");
 
     await expect(commitAll(repoDir, "signed update")).rejects.toThrow("failed to sign the data");
+  });
+
+  it("annotates structured files with staged and unstaged index state", async () => {
+    writeFileSync(join(repoDir, "file.txt"), "staged\n");
+    execFileSync("git", ["add", "file.txt"], { cwd: repoDir });
+    writeFileSync(join(repoDir, "file.txt"), "staged and unstaged\n");
+
+    const diff = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(diff.structured).toContainEqual(
+      expect.objectContaining({
+        path: "file.txt",
+        hasStagedChanges: true,
+        hasUnstagedChanges: true,
+      }),
+    );
   });
 
   it("includes both paths for a staged rename in structured diffs", async () => {
@@ -3821,6 +3843,50 @@ const x = 1;
     it("is case insensitive on Windows paths", () => {
       expect(isDescendantPath("c:\\repo\\child", "C:\\repo")).toBe(true);
     });
+  });
+});
+
+describe("updateCheckoutIndex", () => {
+  it("stages and unstages selected paths without touching siblings", async () => {
+    const { tempDir, repoDir } = initRepo();
+    try {
+      writeFileSync(join(repoDir, "file.txt"), "changed\n");
+      writeFileSync(join(repoDir, "other.txt"), "other\n");
+
+      await updateCheckoutIndex(repoDir, "stage", ["file.txt"]);
+      expect(
+        execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: repoDir }).toString(),
+      ).toBe("file.txt\n");
+
+      await updateCheckoutIndex(repoDir, "unstage", ["file.txt"]);
+      expect(
+        execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: repoDir }).toString(),
+      ).toBe("");
+      expect(execFileSync("git", ["status", "--porcelain"], { cwd: repoDir }).toString()).toContain(
+        "other.txt",
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("unstages all entries in an unborn repository without deleting files", async () => {
+    const tempDir = realpathSync.native(mkdtempSync(join(tmpdir(), "checkout-index-unborn-")));
+    const repoDir = join(tempDir, "repo");
+    mkdirSync(repoDir, { recursive: true });
+    try {
+      execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "new.txt"), "new\n");
+      await updateCheckoutIndex(repoDir, "stage", []);
+      await updateCheckoutIndex(repoDir, "unstage", []);
+
+      expect(readTextFile(join(repoDir, "new.txt"))).toBe("new\n");
+      expect(execFileSync("git", ["status", "--porcelain"], { cwd: repoDir }).toString()).toBe(
+        "?? new.txt\n",
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 
