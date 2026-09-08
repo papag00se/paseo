@@ -1,6 +1,7 @@
 import { Fragment, useMemo, type ReactElement } from "react";
 import { withUnistyles } from "react-native-unistyles";
 import {
+  Archive,
   ArrowRightToLine,
   Copy,
   CopyPlus,
@@ -70,6 +71,7 @@ interface FileActionsContextMenuContentProps {
   onDuplicate?: () => void;
   onStage?: () => void;
   onUnstage?: () => void;
+  onStash?: () => void;
   onRevert?: () => void;
   onDelete?: () => void;
   testIDPrefix?: string;
@@ -99,6 +101,7 @@ export function FileActionsContextMenuContent({
   onDuplicate,
   onStage,
   onUnstage,
+  onStash,
   onRevert,
   onDelete,
   testIDPrefix,
@@ -238,6 +241,12 @@ export function FileActionsContextMenuContent({
             onSelect: onDuplicate,
           }
         : null,
+      optionalFileAction(true, onStash, {
+        key: "stash",
+        group: "manage",
+        label: "Stash changes",
+        icon: Archive,
+      }),
       onRevert
         ? {
             key: "revert",
@@ -285,6 +294,7 @@ export function FileActionsContextMenuContent({
     onReveal,
     onRevert,
     onStage,
+    onStash,
     onUnstage,
     revealTargetName,
     t,

@@ -51,6 +51,7 @@ export const DocumentFileHeader = memo(function DocumentFileHeader({
       onDuplicate={working?.onDuplicate}
       onStage={working?.onStage}
       onUnstage={working?.onUnstage}
+      onStash={working?.onStash}
       onRevert={working?.onRevert}
       testID={`diff-file-${file.fileIndex}`}
       canvasRendered={canvasRendered}
@@ -79,6 +80,7 @@ function documentFileHeaderPropsEqual(
     previous.mode.onDuplicate === next.mode.onDuplicate &&
     previous.mode.onStage === next.mode.onStage &&
     previous.mode.onUnstage === next.mode.onUnstage &&
+    previous.mode.onStash === next.mode.onStash &&
     previous.mode.onRevert === next.mode.onRevert
   );
 }
