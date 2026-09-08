@@ -661,7 +661,8 @@ export class CheckoutSession {
       const message = branchLabel
         ? `${CheckoutSession.PASEO_STASH_PREFIX} ${branchLabel}`
         : `${CheckoutSession.PASEO_STASH_PREFIX} unnamed`;
-      await runGitCommand(["stash", "push", "--include-untracked", "-m", message], {
+      const pathspec = msg.paths?.length ? ["--", ...msg.paths] : [];
+      await runGitCommand(["stash", "push", "--include-untracked", "-m", message, ...pathspec], {
         cwd,
         timeout: 120_000,
       });
