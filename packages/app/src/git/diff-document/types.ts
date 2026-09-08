@@ -30,6 +30,7 @@ export interface WorkingDiffMode {
   onDuplicate?: (path: string) => void;
   onStage?: (path: string, oldPath?: string) => void;
   onUnstage?: (path: string, oldPath?: string) => void;
+  onStash?: (path: string, oldPath?: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
 }
 

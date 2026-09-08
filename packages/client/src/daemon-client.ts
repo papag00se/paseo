@@ -4106,7 +4106,7 @@ export class DaemonClient {
 
   async stashSave(
     cwd: string,
-    options?: { branch?: string },
+    options?: { branch?: string; paths?: string[] },
     requestId?: string,
   ): Promise<StashSavePayload> {
     return this.sendCorrelatedSessionRequest({
@@ -4115,6 +4115,7 @@ export class DaemonClient {
         type: "stash_save_request",
         cwd,
         branch: options?.branch,
+        paths: options?.paths,
       },
       responseType: "stash_save_response",
     });

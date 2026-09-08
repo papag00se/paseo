@@ -2324,6 +2324,8 @@ export const StashSaveRequestSchema = z.object({
   cwd: z.string(),
   /** Branch name to tag the stash with for later identification. */
   branch: z.string().optional(),
+  /** Optional repository-relative paths to stash instead of the entire worktree. */
+  paths: z.array(z.string().min(1)).min(1).optional(),
   requestId: z.string(),
 });
 
@@ -3554,6 +3556,8 @@ export const ServerInfoStatusPayloadSchema = z
         checkoutDiscardChanges: z.boolean().optional(),
         // COMPAT(checkoutIndexActions): custom source-control controls.
         checkoutIndexActions: z.boolean().optional(),
+        // COMPAT(checkoutPathStash): custom per-file stash control.
+        checkoutPathStash: z.boolean().optional(),
         // COMPAT(agentProfiles): added in v0.3.2, remove gate after 2027-02-11.
         // An older daemon parses its persisted config strictly, so writing
         // agentProfiles to one is silently dropped. The client hides the feature

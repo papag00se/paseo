@@ -4580,6 +4580,41 @@ describe("session stash mutation handling", () => {
     });
   });
 
+  test("stashes only requested paths", async () => {
+    const messages: unknown[] = [];
+    const workspaceGitService = { getSnapshot: vi.fn().mockResolvedValue({}) };
+    const session = createSessionForTest({ workspaceGitService, messages });
+    gitCommandMocks.runGitCommand.mockResolvedValue({
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+      signal: null,
+      truncated: false,
+    });
+
+    await session.handleMessage({
+      type: "stash_save_request",
+      cwd: "/tmp/repo",
+      branch: "feature",
+      paths: ["renamed.ts", "original.ts"],
+      requestId: "request-path-stash",
+    });
+
+    expect(gitCommandMocks.runGitCommand).toHaveBeenCalledWith(
+      [
+        "stash",
+        "push",
+        "--include-untracked",
+        "-m",
+        "paseo-auto-stash: feature",
+        "--",
+        "renamed.ts",
+        "original.ts",
+      ],
+      { cwd: "/tmp/repo", timeout: 120_000 },
+    );
+  });
+
   test("forces a workspace git snapshot refresh after popping a stash", async () => {
     const messages: unknown[] = [];
     const workspaceGitService = { getSnapshot: vi.fn().mockResolvedValue({}) };

@@ -53,6 +53,7 @@ export interface FileHeaderProps {
   onDuplicate?: (path: string) => void;
   onStage?: (path: string, oldPath?: string) => void;
   onUnstage?: (path: string, oldPath?: string) => void;
+  onStash?: (path: string, oldPath?: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
   testID?: string;
@@ -149,6 +150,7 @@ function FileHeaderMenu({
   onDuplicate,
   onStage,
   onUnstage,
+  onStash,
   onRevert,
   testID,
 }: FileHeaderProps) {
@@ -171,6 +173,10 @@ function FileHeaderMenu({
     () => onUnstage?.(file.path, file.oldPath),
     [file.oldPath, file.path, onUnstage],
   );
+  const stash = useCallback(
+    () => onStash?.(file.path, file.oldPath),
+    [file.oldPath, file.path, onStash],
+  );
   const revert = useCallback(
     () => onRevert?.(file.path, file.oldPath),
     [file.oldPath, file.path, onRevert],
@@ -190,6 +196,7 @@ function FileHeaderMenu({
       onDuplicate={!file.isDeleted && onDuplicate ? duplicate : undefined}
       onStage={file.hasUnstagedChanges !== false && onStage ? stage : undefined}
       onUnstage={file.hasStagedChanges !== false && onUnstage ? unstage : undefined}
+      onStash={onStash ? stash : undefined}
       onRevert={onRevert ? revert : undefined}
       testIDPrefix={testID}
     />

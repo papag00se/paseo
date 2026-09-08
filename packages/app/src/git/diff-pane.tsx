@@ -225,6 +225,45 @@ function useIndexPathActions({
   );
 }
 
+function useStashPathAction({
+  serverId,
+  cwd,
+  branch,
+  diffMode,
+}: {
+  serverId: string;
+  cwd: string;
+  branch: string | null;
+  diffMode: "uncommitted" | "base";
+}): ((path: string, oldPath?: string) => void) | undefined {
+  const toast = useToast();
+  const client = useSessionStore((state) => state.sessions[serverId]?.client);
+  const supported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.checkoutPathStash === true,
+  );
+  const stashPath = useCallback(
+    (path: string, oldPath?: string) => {
+      if (!client) return;
+      void client
+        .stashSave(cwd, {
+          branch: branch ?? undefined,
+          paths: oldPath ? [path, oldPath] : [path],
+        })
+        .then((payload) => {
+          if (!payload.success) {
+            throw new Error(payload.error?.message ?? "Failed to stash changes");
+          }
+          return undefined;
+        })
+        .catch((cause) => {
+          toast.error(cause instanceof Error ? cause.message : "Failed to stash changes");
+        });
+    },
+    [branch, client, cwd, toast],
+  );
+  return supported && diffMode === "uncommitted" ? stashPath : undefined;
+}
+
 interface ChangesSurfaceProps {
   serverId: string;
   workspaceId?: string | null;
@@ -1833,6 +1872,12 @@ export function ChangesSurface({
   );
   const onRevertPath = useDiscardChangesAction({ serverId, cwd, diffMode });
   const indexPathActions = useIndexPathActions({ serverId, cwd, diffMode });
+  const onStashPath = useStashPathAction({
+    serverId,
+    cwd,
+    branch: currentBranchName,
+    diffMode,
+  });
   const [localFocusRequest, setLocalFocusRequest] = useState<{
     path: string;
     revision: number;
@@ -1877,6 +1922,7 @@ export function ChangesSurface({
       onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
       onStage: indexPathActions?.stage,
       onUnstage: indexPathActions?.unstage,
+      onStash: onStashPath,
       onRevert: onRevertPath,
     }),
     [
@@ -1896,6 +1942,7 @@ export function ChangesSurface({
       fileManagerTarget,
       fsEntryDuplicateEnabled,
       indexPathActions,
+      onStashPath,
       onRevertPath,
     ],
   );
