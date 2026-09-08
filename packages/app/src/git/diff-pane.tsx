@@ -1419,6 +1419,9 @@ function ChangedFilesTree({
           revealTargetName={mode.revealTargetName}
           onDownload={mode.onDownload}
           onDuplicate={mode.onDuplicate}
+          onStage={mode.onStage}
+          onUnstage={mode.onUnstage}
+          onStash={mode.onStash}
           onRevert={mode.onRevert}
           testID={`diff-tree-file-${item.fileIndex}`}
         />
