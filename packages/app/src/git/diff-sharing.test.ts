@@ -53,6 +53,12 @@ const fileChanges = {
   deletions: (value) => {
     value.deletions = 2;
   },
+  hasStagedChanges: (value) => {
+    value.hasStagedChanges = !value.hasStagedChanges;
+  },
+  hasUnstagedChanges: (value) => {
+    value.hasUnstagedChanges = !value.hasUnstagedChanges;
+  },
   hunks: (value) => {
     value.hunks = [];
   },
