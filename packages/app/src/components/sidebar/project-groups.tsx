@@ -239,15 +239,16 @@ export function SidebarProjectGroupModals(): ReactElement {
   }, [editing, editorTarget]);
 
   const chooseImage = useCallback(() => {
-    void pickFiles().then((files) => {
+    void pickFiles().then(async (files) => {
       const file = files?.[0];
       if (!file) return undefined;
-      if (file.bytes.byteLength > 512 * 1024) {
+      const bytes = await file.readBytes();
+      if (bytes.byteLength > 512 * 1024) {
         toast.error("Group icons must be 512 KB or smaller");
         return undefined;
       }
-      const mimeType = file.mimeType?.startsWith("image/") ? file.mimeType : "image/png";
-      setIconUri(`data:${mimeType};base64,${Buffer.from(file.bytes).toString("base64")}`);
+      const mimeType = file.mimeType.startsWith("image/") ? file.mimeType : "image/png";
+      setIconUri(`data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`);
       return undefined;
     });
   }, [pickFiles, toast]);
