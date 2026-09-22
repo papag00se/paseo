@@ -33,6 +33,8 @@ export interface EnsureAgentLoadedDeps {
   agentStorage: AgentStorage;
   validProviders?: Iterable<AgentProvider>;
   broadcastTimeline?: boolean;
+  /** Read-only consumers may supply an existing directory when an archived worktree is gone. */
+  cwdOverride?: string;
   logger: Logger;
 }
 
@@ -107,7 +109,7 @@ export async function ensureAgentLoaded(
     if (handle) {
       snapshot = await deps.agentManager.resumeAgentFromPersistence(
         handle,
-        buildConfigOverrides(record),
+        { ...buildConfigOverrides(record), ...(deps.cwdOverride ? { cwd: deps.cwdOverride } : {}) },
         agentId,
         extractTimestamps(record),
         record.archivedAt ? { purpose: "history" } : undefined,

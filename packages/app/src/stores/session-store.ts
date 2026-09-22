@@ -53,6 +53,7 @@ import {
   buildWorkspaceAgentActivityIndex,
   type WorkspaceAgentActivity,
 } from "@/utils/workspace-agent-activity";
+import type { AgentMomentumSnapshot } from "@getpaseo/protocol/messages";
 import {
   resolveTurnPresentation,
   TURN_LIVENESS_IDLE,
@@ -78,6 +79,7 @@ export interface Agent {
   createdAt: Date;
   updatedAt: Date;
   lastUserMessageAt: Date | null;
+  momentum?: AgentMomentumSnapshot;
   lastActivityAt: Date;
   capabilities: AgentCapabilityFlags;
   currentModeId: string | null;

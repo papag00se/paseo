@@ -18,6 +18,7 @@ import {
 import type { Logger } from "pino";
 import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
 import type { ProviderPaseoToolsPolicy } from "@getpaseo/protocol/provider-config";
+import type { AgentMomentumSnapshot } from "@getpaseo/protocol/messages";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 
@@ -398,6 +399,7 @@ interface ManagedAgentBase {
   persistence: AgentPersistenceHandle | null;
   historyPrimed: boolean;
   lastUserMessageAt: Date | null;
+  momentum?: AgentMomentumSnapshot;
   activeTurnId: string | null;
   activeTurnStartedAt: Date | null;
   lastUsage?: AgentUsage;
@@ -903,6 +905,15 @@ export class AgentManager {
     const nowMs = Date.now();
     const nextMs = nowMs > previousMs ? nowMs : previousMs + 1;
     return new Date(nextMs).toISOString();
+  }
+
+  setMomentum(agentId: string, momentum: AgentMomentumSnapshot): void {
+    const agent = this.agents.get(agentId);
+    if (!agent || agent.internal) {
+      return;
+    }
+    agent.momentum = momentum;
+    this.emitState(agent);
   }
 
   hasInFlightRun(agentId: string): boolean {
@@ -1856,6 +1867,7 @@ export class AgentManager {
         persistence: record.persistence ?? null,
         historyPrimed: true,
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
+        momentum: record.momentum,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
         attention,

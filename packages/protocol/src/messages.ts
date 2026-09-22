@@ -851,6 +851,15 @@ const AgentActiveTurnPayloadSchema = z.object({
   startedAt: z.string().nullable(),
 });
 
+export const AgentMomentumSnapshotSchema = z.object({
+  focus: z.string(),
+  next: z.string(),
+  state: z.enum(["working", "waiting_on_you", "blocked", "ready_to_continue", "parked"]),
+  sourceUpdatedAt: z.string(),
+  generatedAt: z.string(),
+});
+export type AgentMomentumSnapshot = z.infer<typeof AgentMomentumSnapshotSchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -865,6 +874,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastUserMessageAt: z.string().nullable(),
   status: AgentStatusSchema,
   activeTurn: AgentActiveTurnPayloadSchema.nullable().optional(),
+  momentum: AgentMomentumSnapshotSchema.optional(),
   capabilities: AgentCapabilityFlagsSchema,
   currentModeId: z.string().nullable(),
   availableModes: z.array(AgentModeSchema),

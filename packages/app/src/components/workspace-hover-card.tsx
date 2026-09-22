@@ -39,6 +39,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
 import { useHosts } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 import {
   COUNTED_CHECK_PRESENTATIONS,
   countCheckPresentations,
@@ -94,7 +95,7 @@ function computeHoverCardPosition({
 }
 
 const HOVER_GRACE_MS = 100;
-const HOVER_CARD_WIDTH = 260;
+const HOVER_CARD_WIDTH = 360;
 
 interface WorkspaceHoverCardProps {
   workspace: SidebarWorkspaceEntry;
@@ -299,6 +300,7 @@ function WorkspaceHoverCardContent({
               {workspace.name}
             </Text>
           </View>
+          <WorkspaceMomentum workspace={workspace} />
           {prHint ? <PrBadge hint={prHint} style={styles.cardInfoRow} /> : null}
           {workspace.diffStat ? (
             <View style={styles.cardInfoRow}>
@@ -341,6 +343,58 @@ function WorkspaceHoverCardContent({
         </FloatingSurface>
       </View>
     </Portal>
+  );
+}
+
+function WorkspaceMomentum({
+  workspace,
+}: {
+  workspace: SidebarWorkspaceEntry;
+}): ReactElement | null {
+  const agents = useSessionStore((state) => state.sessions[workspace.serverId]?.agents);
+  const workspaceAgents = useMemo(
+    () =>
+      Array.from(agents?.values() ?? []).filter(
+        (agent) => agent.workspaceId === workspace.workspaceId,
+      ),
+    [agents, workspace.workspaceId],
+  );
+  const summaries = useMemo(
+    () =>
+      workspaceAgents
+        .filter((agent) => agent.momentum)
+        .sort(
+          (left, right) =>
+            Date.parse(right.momentum?.generatedAt ?? "") -
+            Date.parse(left.momentum?.generatedAt ?? ""),
+        ),
+    [workspaceAgents],
+  );
+
+  // Always expose Momentum. Agent records are replicated lazily, so hiding this
+  // section until the replica arrives made the feature appear nonexistent.
+  return (
+    <>
+      <View style={styles.separator} />
+      {summaries.length === 0 ? (
+        <View style={styles.momentumBlock} testID="workspace-momentum-pending">
+          <Text style={styles.momentumAgent}>Momentum</Text>
+          <Text style={styles.momentumText}>
+            Preparing a session summary. It updates after the agent resumes or completes work.
+          </Text>
+        </View>
+      ) : null}
+      {summaries.map((agent) => (
+        <View key={agent.id} style={styles.momentumBlock}>
+          <Text style={styles.momentumAgent}>{agent.title ?? "Agent"}</Text>
+          <Text style={styles.momentumText}>{agent.momentum?.focus}</Text>
+          <Text style={styles.momentumNext}>
+            {agent.momentum?.state === "waiting_on_you" ? "Waiting on you: " : "Likely next: "}
+            {agent.momentum?.next}
+          </Text>
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -613,6 +667,26 @@ const styles = StyleSheet.create((theme) => ({
   },
   cardInfoTextHovered: {
     color: theme.colors.foreground,
+  },
+  momentumBlock: {
+    gap: 2,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  momentumAgent: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  momentumText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+  momentumNext: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
   },
   separator: {
     height: 1,
