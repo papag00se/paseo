@@ -4,7 +4,6 @@ import {
   type PluginProcessRequest,
 } from "./plugin-process-protocol.js";
 import { createRequire } from "node:module";
-import { defineAttachmentSource, defineRpc, type PluginRpcContract } from "@getpaseo/plugin";
 import {
   ProviderEventSchema,
   type ProviderConnection,
@@ -20,6 +19,24 @@ import {
   isPluginServerTypesSdkSpecifier,
 } from "./plugin-sdk-specifiers.js";
 import { createPluginClientId } from "./plugin-session-identity.js";
+
+interface PluginRpcContract {
+  name: string;
+  input: { parseAsync(input: unknown): Promise<unknown> };
+  output: { parseAsync(output: unknown): Promise<unknown> };
+}
+
+function defineRpc(contract: PluginRpcContract): PluginRpcContract {
+  const name = contract.name.trim();
+  if (!/^[a-z][a-z0-9._-]*$/.test(name)) {
+    throw new Error(`Invalid plugin RPC method: ${contract.name}`);
+  }
+  return { ...contract, name };
+}
+
+function defineAttachmentSource<T>(definition: T): T {
+  return definition;
+}
 
 type RpcHandler = (input: unknown, context: PluginHandlerContext) => unknown | Promise<unknown>;
 
