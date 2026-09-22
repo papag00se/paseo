@@ -2115,9 +2115,9 @@ export const en = {
       },
     },
     metadataGeneration: {
-      title: "Metadata generation",
+      title: "Metadata & Momentum",
       description:
-        "Choose the model Paseo uses for workspace titles, branch names, commit messages, and pull request drafts",
+        "Choose the model Paseo uses for workspace metadata and Momentum summaries. Automatic Momentum uses Luna with Haiku fallback; a manual selection overrides that chain.",
       selection: "Model selection",
       automatic: "Automatic",
       preferred: "Manual",

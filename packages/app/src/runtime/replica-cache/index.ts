@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AgentMomentumSnapshotSchema,
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
@@ -238,6 +239,7 @@ const StoredAgentSnapshotSchema = z.strictObject({
     })
     .nullable()
     .optional(),
+  momentum: AgentMomentumSnapshotSchema.optional(),
   capabilities: AgentCapabilitiesSchema,
   currentModeId: z.string().nullable(),
   availableModes: z.array(z.never()).max(0),
@@ -600,6 +602,7 @@ function serializeAgent(agent: Agent): StoredAgent {
     createdAt: agent.createdAt.toISOString(),
     updatedAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt?.toISOString() ?? null,
+    momentum: agent.momentum,
     status: agent.status,
     ...(agent.turn.phase === "open" && agent.turn.turnId
       ? {
