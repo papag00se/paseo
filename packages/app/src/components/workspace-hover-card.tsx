@@ -356,7 +356,9 @@ function WorkspaceMomentum({
   const workspaceAgents = useMemo(
     () =>
       Array.from(agents?.values() ?? []).filter(
-        (agent) => agent.workspaceId === workspace.workspaceId,
+        // Subagents report a parent's delegated step, so they would drown out the
+        // workspace's own momentum. Keep only top-level agents.
+        (agent) => agent.workspaceId === workspace.workspaceId && agent.parentAgentId === null,
       ),
     [agents, workspace.workspaceId],
   );

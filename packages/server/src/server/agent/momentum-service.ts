@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
+import { isDelegatedAgent } from "@getpaseo/protocol/agent-labels";
 import {
   generateStructuredAgentResponseWithFallback,
   type StructuredGenerationLogger,
@@ -76,6 +77,8 @@ export class MomentumService {
         (agent) =>
           !agent.archivedAt &&
           !agent.internal &&
+          // Subagents summarize a parent's delegated step, not the workspace's own work.
+          !isDelegatedAgent(agent) &&
           (agent.requiresAttention || Date.parse(agent.updatedAt) >= cutoff),
       )
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
@@ -115,7 +118,7 @@ export class MomentumService {
   async refresh(agentId: string): Promise<void> {
     if (this.running.has(agentId)) return;
     const agent = this.deps.agentManager.getAgent(agentId);
-    if (!agent || agent.internal) return;
+    if (!agent || agent.internal || isDelegatedAgent(agent)) return;
     this.running.add(agentId);
     try {
       const sourceUpdatedAt = agent.updatedAt.toISOString();
