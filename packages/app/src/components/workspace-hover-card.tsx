@@ -380,7 +380,9 @@ function WorkspaceMomentum({
         <View style={styles.momentumBlock} testID="workspace-momentum-pending">
           <Text style={styles.momentumAgent}>Momentum</Text>
           <Text style={styles.momentumText}>
-            Preparing a session summary. It updates after the agent resumes or completes work.
+            {workspaceAgents.length === 0
+              ? "No active agents to pull info from."
+              : "Preparing a session summary. It updates after the agent resumes or completes work."}
           </Text>
         </View>
       ) : null}
