@@ -18,6 +18,7 @@ import {
   type GitActions,
 } from "@/git/policy";
 import { deriveMergeCapability } from "@/git/merge-capability";
+import { CommitMessageModal } from "@/git/commit-message-modal";
 import type { CheckoutPrMergeMethod } from "@getpaseo/protocol/messages";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useToast } from "@/contexts/toast-context";
@@ -79,18 +80,6 @@ function forgeVocabulary(forge: Forge): { context: "mr" | undefined } {
 
 function openURLInNewTab(url: string): void {
   void openExternalUrl(url);
-}
-
-function requestCommitMessage(requireMessage: boolean): string | null {
-  const prompt = Reflect.get(globalThis, "prompt");
-  if (typeof prompt !== "function") {
-    return requireMessage ? null : "";
-  }
-  const label = requireMessage
-    ? "Commit message for staged changes:"
-    : "Commit message (leave blank to let Paseo generate one):";
-  const result = prompt(label, "") as unknown;
-  return typeof result === "string" ? result.trim() : null;
 }
 
 function isActionDisabled(actionsDisabled: boolean, status: CheckoutGitActionStatus): boolean {
@@ -217,6 +206,8 @@ interface UseGitActionsResult {
   gitActions: GitActions;
   branchLabel: string;
   isGit: boolean;
+  /** Must be rendered by the consumer so Commit can collect its message. */
+  commitMessageModal: ReactElement;
 }
 
 interface UseWorkspaceScreenArchiveControllerInput {
@@ -497,24 +488,33 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   );
 
   // Handlers
-  const commit = useCallback(
-    (addAll: boolean) => {
-      const message = requestCommitMessage(!addAll);
-      if (message === null) return;
-      if (!addAll && !message) {
-        toast.error("Enter a commit message for staged changes.");
-        return;
+  // Electron's renderer defines window.prompt but throws when it is called, which silently
+  // killed every commit. Collect the message with an in-app modal instead.
+  const [commitRequest, setCommitRequest] = useState<{ addAll: boolean } | null>(null);
+  const commit = useCallback((addAll: boolean) => {
+    setCommitRequest({ addAll });
+  }, []);
+  const closeCommitRequest = useCallback(() => setCommitRequest(null), []);
+  const submitCommitMessage = useCallback(
+    async (message: string) => {
+      const addAll = commitRequest?.addAll ?? true;
+      try {
+        await runCommit({ serverId, cwd, addAll, message: message || undefined });
+        toastActionSuccess(t("workspace.git.actions.commit.success"));
+      } catch (err) {
+        toastActionError(err, t("workspace.git.actions.toasts.failedCommit"));
+        throw err;
       }
-      void runCommit({ serverId, cwd, addAll, message: message || undefined })
-        .then(() => {
-          toastActionSuccess(t("workspace.git.actions.commit.success"));
-          return;
-        })
-        .catch((err) => {
-          toastActionError(err, t("workspace.git.actions.toasts.failedCommit"));
-        });
     },
-    [cwd, runCommit, serverId, t, toast, toastActionError, toastActionSuccess],
+    [commitRequest, cwd, runCommit, serverId, t, toastActionError, toastActionSuccess],
+  );
+  const commitMessageModal = (
+    <CommitMessageModal
+      visible={commitRequest !== null}
+      requireMessage={commitRequest !== null && !commitRequest.addAll}
+      onClose={closeCommitRequest}
+      onSubmit={submitCommitMessage}
+    />
   );
   const handleCommit = useCallback(() => commit(true), [commit]);
   const handleCommitStaged = useCallback(() => commit(false), [commit]);
@@ -933,7 +933,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     [gitActionsInput, baseRefLabel, hasPullRequest, forge, t],
   );
 
-  return { gitActions, branchLabel, isGit };
+  return { gitActions, branchLabel, isGit, commitMessageModal };
 }
 
 function translateGitActions(
