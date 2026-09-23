@@ -38,7 +38,7 @@ import { useHoverSafeZone } from "@/hooks/use-hover-safe-zone";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
-import { useHosts } from "@/runtime/host-runtime";
+import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import {
   COUNTED_CHECK_PRESENTATIONS,
@@ -351,6 +351,7 @@ function WorkspaceMomentum({
 }: {
   workspace: SidebarWorkspaceEntry;
 }): ReactElement | null {
+  const client = useHostRuntimeClient(workspace.serverId);
   const agents = useSessionStore((state) => state.sessions[workspace.serverId]?.agents);
   const workspaceAgents = useMemo(
     () =>
@@ -359,6 +360,9 @@ function WorkspaceMomentum({
       ),
     [agents, workspace.workspaceId],
   );
+  const refreshMomentum = useCallback(() => {
+    void Promise.all(workspaceAgents.map((agent) => client?.refreshAgent(agent.id)));
+  }, [client, workspaceAgents]);
   const summaries = useMemo(
     () =>
       workspaceAgents
@@ -385,6 +389,11 @@ function WorkspaceMomentum({
               : "Preparing a session summary. It updates after the agent resumes or completes work."}
           </Text>
         </View>
+      ) : null}
+      {workspaceAgents.length > 0 ? (
+        <Pressable accessibilityRole="button" onPress={refreshMomentum}>
+          <Text style={styles.momentumNext}>Refresh</Text>
+        </Pressable>
       ) : null}
       {summaries.map((agent) => (
         <View key={agent.id} style={styles.momentumBlock}>
