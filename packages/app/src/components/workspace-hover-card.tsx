@@ -390,7 +390,7 @@ function WorkspaceMomentum({
           </Text>
         </View>
       ) : null}
-      {workspaceAgents.length > 0 ? (
+      {summaries.length > 0 ? (
         <Pressable accessibilityRole="button" onPress={refreshMomentum}>
           <Text style={styles.momentumNext}>Refresh</Text>
         </Pressable>
