@@ -236,9 +236,25 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         run: npm run test:e2e:lifecycle --workspace=@getpaseo/desktop
 
+      - name: Check out Markdown Preview plugin
+        if: ${{ runner.os == 'Linux' }}
+        uses: actions/checkout@v4
+        with:
+          repository: papag00se/paseo-markdown-preview
+          ref: f05d94b764fd1fe938d0557f2a66c835e6893bb7
+          path: .ci/markdown-preview
+          persist-credentials: false
+
+      - name: Install and prepare Markdown Preview plugin
+        if: ${{ runner.os == 'Linux' }}
+        # npm ci runs prepare to generate the checkout-local Crossnote dependency path.
+        run: node scripts/npm-retry.mjs --prefix .ci/markdown-preview ci --legacy-peer-deps
+
       - name: Run desktop renderer E2E
         if: ${{ runner.os == 'Linux' }}
         run: npm run test:e2e:renderer --workspace=@getpaseo/desktop
+        env:
+          PASEO_MARKDOWN_PREVIEW_PATH: ${{ github.workspace }}/.ci/markdown-preview
 
       - name: Run desktop browser E2E
         if: ${{ runner.os == 'Linux' }}

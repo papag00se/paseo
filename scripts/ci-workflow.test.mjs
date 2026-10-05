@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { relative as relativePath } from "node:path";
+import { matchesGlob, relative as relativePath } from "node:path";
 import test from "node:test";
 
 const repoRoot = new URL("../", import.meta.url);
@@ -163,6 +163,7 @@ test("PR routing declares stable behavior ownership", () => {
     desktop: [
       "packages/desktop/**",
       "packages/app/src/desktop/**",
+      "packages/app/src/**/*.electron.{ts,tsx}",
       "packages/server/src/server/browser-tools/**",
       "packages/app/e2e/support/**",
       "packages/app/*config.{cjs,js,ts}",
@@ -226,13 +227,11 @@ test("browser and desktop tests have exclusive, directory-owned suites", () => {
   const filters = loadFilters(filtersPath);
   const browserSpecs = filesUnder("packages/app/e2e", (path) => path.endsWith(".spec.ts"));
   const desktopSpecs = filesUnder("packages/desktop/e2e", (path) => path.endsWith(".spec.ts"));
-  const electronModules = filesUnder("packages/app/src", (path) => /\.electron\.tsx?$/.test(path));
 
   assert.ok(browserSpecs.length > 0);
   assert.ok(desktopSpecs.length > 0);
   assert.ok(browserSpecs.every((path) => path.startsWith("packages/app/e2e/browser/")));
   assert.ok(desktopSpecs.every((path) => path.startsWith("packages/desktop/e2e/")));
-  assert.ok(electronModules.every((path) => path.startsWith("packages/app/src/desktop/")));
 
   const desktopPackage = JSON.parse(readFileSync(desktopPackagePath, "utf8"));
   assert.match(desktopPackage.scripts.test, /--exclude ["']e2e\/\*\*["']/);
@@ -252,6 +251,7 @@ test("browser and desktop tests have exclusive, directory-owned suites", () => {
   assert.deepEqual(filters.desktop, [
     "packages/desktop/**",
     "packages/app/src/desktop/**",
+    "packages/app/src/**/*.electron.{ts,tsx}",
     "packages/server/src/server/browser-tools/**",
     "packages/app/e2e/support/**",
     "packages/app/*config.{cjs,js,ts}",
@@ -279,6 +279,36 @@ test("browser and desktop tests have exclusive, directory-owned suites", () => {
     "packages/app/*config.{cjs,js,ts}",
     "packages/app/package.json",
   ]);
+});
+
+test("desktop CI selects every Electron overlay without selecting ordinary browser source", () => {
+  const filters = loadFilters(filtersPath);
+  const selectsDesktop = (path) => filters.desktop.some((pattern) => matchesGlob(path, pattern));
+  const electronModules = filesUnder("packages/app/src", (path) => /\.electron\.tsx?$/.test(path));
+
+  // CLAUDE.md and Metro permit feature-local overlays. Crossnote exposed the old
+  // directory restriction: its file-pane overlay was valid, but missed desktop CI.
+  assert.ok(electronModules.length > 0);
+  for (const path of electronModules) {
+    assert.ok(
+      selectsDesktop(path),
+      `${path} must select desktop CI regardless of its feature directory`,
+    );
+  }
+
+  for (const [path, expected] of [
+    ["packages/app/src/file-pane/markdown-preview/index.electron.tsx", true],
+    ["packages/app/src/desktop/browser/pane/element-selector.electron.ts", true],
+    ["packages/desktop/e2e/markdown-preview.spec.ts", true],
+    ["packages/app/src/file-pane/markdown-preview/index.tsx", false],
+    ["packages/app/src/components/file-explorer-pane.tsx", false],
+  ]) {
+    assert.equal(selectsDesktop(path), expected, path);
+  }
+
+  for (const spec of filesUnder("packages/app/e2e/browser", (path) => path.endsWith(".spec.ts"))) {
+    assert.equal(selectsDesktop(spec), false, `${spec} belongs to the browser suite`);
+  }
 });
 
 test("packaging runs on main without allocating pull-request runners", () => {
