@@ -56,6 +56,7 @@ import type {
   ExplorerEntry,
 } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
+import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
 import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
 import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
@@ -375,6 +376,7 @@ function TreeRowItem({
       </ContextMenuTrigger>
       <FileActionsContextMenuContent
         fileKind={entry.kind}
+        onPreview={!isDirectory && isRenderedMarkdownFile(entry.path) ? handlePress : undefined}
         onOpenInEditor={onOpenInEditor ? handleOpenInEditor : undefined}
         editorTargetName={editorTargetName}
         onCopyPath={handleCopy}

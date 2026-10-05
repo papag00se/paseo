@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
@@ -9,36 +9,39 @@ export function FileMarkdownPreview({ source }: { source: string }) {
   const document = useMemo(() => parseMarkdownPreviewDocument(source), [source]);
 
   return (
-    <View style={styles.outerGutter}>
-      <View style={styles.readingFrame}>
-        {document.frontMatter.length > 0 ? (
-          <View style={styles.frontMatterTable} testID="markdown-front-matter">
-            {document.frontMatter.map((row, index) => (
-              <View
-                key={row.key}
-                style={[styles.frontMatterRow, index > 0 && styles.frontMatterRowBorder]}
-              >
-                <View style={styles.frontMatterKeyCell}>
-                  <Text selectable style={styles.frontMatterKey}>
-                    {row.key}
-                  </Text>
+    <ScrollView style={styles.scroll} showsVerticalScrollIndicator>
+      <View style={styles.outerGutter}>
+        <View style={styles.readingFrame}>
+          {document.frontMatter.length > 0 ? (
+            <View style={styles.frontMatterTable} testID="markdown-front-matter">
+              {document.frontMatter.map((row, index) => (
+                <View
+                  key={row.key}
+                  style={[styles.frontMatterRow, index > 0 && styles.frontMatterRowBorder]}
+                >
+                  <View style={styles.frontMatterKeyCell}>
+                    <Text selectable style={styles.frontMatterKey}>
+                      {row.key}
+                    </Text>
+                  </View>
+                  <View style={styles.frontMatterValueCell}>
+                    <Text selectable style={styles.frontMatterValue}>
+                      {row.value}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.frontMatterValueCell}>
-                  <Text selectable style={styles.frontMatterValue}>
-                    {row.value}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : null}
-        <MarkdownRenderer text={document.body} />
+              ))}
+            </View>
+          ) : null}
+          <MarkdownRenderer text={document.body} />
+        </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
+  scroll: { flex: 1, minHeight: 0 },
   outerGutter: {
     width: "100%",
     paddingHorizontal: {

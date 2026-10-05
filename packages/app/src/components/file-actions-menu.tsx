@@ -55,6 +55,7 @@ interface FileActionsContextMenuContentProps {
   fileKind: "file" | "directory";
   fileExists?: boolean;
   onOpenFile?: () => void;
+  onPreview?: () => void;
   onOpenInEditor?: () => void;
   editorTargetName?: string;
   onOpenToSide?: () => void;
@@ -85,6 +86,7 @@ export function FileActionsContextMenuContent({
   fileKind,
   fileExists = true,
   onOpenFile,
+  onPreview,
   onOpenInEditor,
   editorTargetName,
   onOpenToSide,
@@ -159,6 +161,12 @@ export function FileActionsContextMenuContent({
             onSelect: onOpenFile,
           }
         : null,
+      optionalFileAction(availableFile, onPreview, {
+        key: "preview",
+        group: "open",
+        label: t("panels.file.editor.preview"),
+        icon: FileText,
+      }),
       openInEditorAction,
       optionalFileAction(availableFile, onOpenToSide, {
         key: "open-to-side",
@@ -288,6 +296,7 @@ export function FileActionsContextMenuContent({
     onNewFile,
     onNewFolder,
     onOpenFile,
+    onPreview,
     openInEditorAction,
     onOpenToSide,
     onRename,

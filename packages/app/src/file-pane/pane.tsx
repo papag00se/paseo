@@ -1,15 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import { ScrollView as RNScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -145,8 +138,6 @@ function FilePreviewBody({
       ? filePreviewRenderKind(filePath)
       : null;
 
-  const previewScrollRef = useRef<RNScrollView>(null);
-
   if (isLoading && !preview) {
     return (
       <View style={styles.centerState} testID="file-preview-loading">
@@ -177,13 +168,7 @@ function FilePreviewBody({
     if (renderKind === "markdown") {
       return (
         <View style={styles.previewScrollContainer}>
-          <RNScrollView
-            ref={previewScrollRef}
-            style={styles.previewContent}
-            showsVerticalScrollIndicator
-          >
-            <FileMarkdownPreview source={preview.content ?? ""} />
-          </RNScrollView>
+          <FileMarkdownPreview source={preview.content ?? ""} />
         </View>
       );
     }
@@ -276,7 +261,7 @@ export function FilePane({
     liveFileSnapshot: liveFile.snapshot,
   });
 
-  useEffect(() => setPreviewMode("preview"), [targetKey]);
+  useEffect(() => setPreviewMode("preview"), [targetKey, navigationRevision]);
 
   const { file: preview, imageAttachment } = resolveFilePreviewLifecycle(previewLifecycle);
   const imagePreviewUri = useAttachmentPreviewUrl(imageAttachment);

@@ -78,6 +78,18 @@ Placement intent still controls existing tabs:
 Explicit **Open to Side** uses `pane`. Implicit opens use `prefer`, so a preference affects only a
 new target and never yanks an existing tab out of a user-selected pane.
 
+## Markdown file previews
+
+This fork uses the `markdown-preview` plugin's Crossnote renderer for desktop Markdown file tabs.
+Explorer file clicks and **Preview** in the file context menu share normal file-tab identity and
+placement. The file toolbar switches between the rendered document and the source editor; line
+references still open source. Browser and native clients keep the built-in renderer.
+
+The plugin must include the selected-file `preview.open` contract and session cleanup RPC. Its
+loopback renderer requires the desktop client and daemon on the same machine. Install the updated
+plugin separately; building the desktop does not install or reload it. Missing or outdated plugins
+show a retryable preview error while leaving Source accessible.
+
 ## Routing preferences
 
 Desktop **Settings → Layout → Open location** has independent Main panel or On the side choices for
