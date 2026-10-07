@@ -32,7 +32,7 @@ function requestResult<Result>(request: IDBRequest<Result>): Promise<Result> {
 }
 
 function transactionComplete(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
+  const completion = new Promise<void>((resolve, reject) => {
     transaction.addEventListener("complete", () => resolve());
     transaction.addEventListener("abort", () =>
       reject(transaction.error ?? new Error("Replica row store transaction was aborted")),
@@ -41,6 +41,11 @@ function transactionComplete(transaction: IDBTransaction): Promise<void> {
       reject(transaction.error ?? new Error("Replica row store transaction failed")),
     );
   });
+  // Requests can reject (or throw synchronously) before the caller reaches its
+  // await of completion. Observe aborts immediately without changing the promise
+  // returned to callers: awaiting it must still report the transaction failure.
+  void completion.catch(() => undefined);
+  return completion;
 }
 
 async function runTransaction(

@@ -99,6 +99,35 @@ class MemoryStorage implements ReplicaRowStore {
   }
 }
 
+it("does not block network bootstrap by retrying a failed cache write during a read", async () => {
+  const storage = new MemoryStorage();
+  const cache = createCache(storage);
+  cache.commitTimeline(SERVER_ID, "agent-1", {
+    agentId: "agent-1",
+    items: [timelineItem()],
+    range: null,
+    hasOlder: false,
+  });
+  // A durable failure must leave the pending write available for later recovery,
+  // but cache preparation must settle so the viewed owner can fetch the network.
+  storage.apply = async () => {
+    throw new Error("disk unavailable");
+  };
+  storage.onRead = () => {
+    // Bound the old infinite loop so this regression fails without hanging tests.
+    if (storage.reads.length >= 3) throw new Error("cache read is retrying forever");
+  };
+  try {
+    expect(await cache.readTimeline(SERVER_ID, "agent-1")).toBeUndefined();
+    expect(storage.reads).toHaveLength(0);
+  } finally {
+    storage.apply = MemoryStorage.prototype.apply.bind(storage);
+    storage.onRead = null;
+    await cache.flush();
+  }
+  expect((await cache.readTimeline(SERVER_ID, "agent-1"))?.items).toEqual([timelineItem()]);
+});
+
 const noLegacyCleanup = { clearLegacyCache: async () => undefined };
 
 function createCache(storage: MemoryStorage, maxBytes?: number): ReplicaCache {

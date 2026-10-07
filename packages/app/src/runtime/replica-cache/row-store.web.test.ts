@@ -24,6 +24,31 @@ runReplicaRowStoreContract("IndexedDB", async () => {
   };
 });
 
+it("handles an aborted read without leaking a rejected transaction promise", async () => {
+  const store = createIndexedDbReplicaRowStore({
+    databaseName: `replica-row-store-aborted-${databaseSequence++}`,
+    schemaVersion: 1,
+  });
+  await store.open();
+  const originalGetAll = FakeIDBObjectStore.prototype.getAll;
+  const getAll = vi.spyOn(FakeIDBObjectStore.prototype, "getAll").mockImplementation(function (
+    this: InstanceType<typeof FakeIDBObjectStore>,
+    ...args
+  ) {
+    this.transaction.abort();
+    return originalGetAll.apply(this, args);
+  });
+  try {
+    await expect(store.readAll()).rejects.toThrow();
+    await expect(store.read("server-a", ["agent"])).rejects.toThrow();
+    // Drain actual IndexedDB abort events, not just promise microtasks.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  } finally {
+    getAll.mockRestore();
+  }
+  expect(await store.readAll()).toEqual([]);
+});
+
 it("uses exact IndexedDB keys for targeted rows instead of scanning the host", async () => {
   const store = createIndexedDbReplicaRowStore({
     databaseName: `replica-row-store-targeted-${databaseSequence++}`,

@@ -1065,6 +1065,40 @@ describe("processTimelineResponse", () => {
     });
   });
 
+  it("keeps sentence fragments in one Thinking card while bootstrap is still pending", () => {
+    const chunks = [
+      "The ",
+      "readRows operation ",
+      "is waiting to ",
+      "flush live operations",
+      ", but there's ",
+      "a revision mismatch with ",
+      "the host ",
+      "on each read.",
+    ];
+    let tail: StreamItem[] = [];
+    let head: StreamItem[] = [];
+    let cursor: TimelineCursor | undefined;
+    for (const [index, text] of chunks.entries()) {
+      const live = processAgentStreamEvent({
+        ...baseStreamInput,
+        currentTail: tail,
+        currentHead: head,
+        currentCursor: cursor,
+        event: makeTimelineEvent(text, "reasoning"),
+        seq: 100 + index,
+        epoch: "epoch-1",
+        hasAuthoritativeBaseline: false,
+      });
+      tail = live.tail;
+      head = live.head;
+      cursor = live.cursor ?? undefined;
+      expect(tail).toEqual([]);
+      expect(head).toHaveLength(1);
+    }
+    expect(head[0]).toMatchObject({ kind: "thought", text: chunks.join("") });
+  });
+
   it("does not duplicate a live row already covered by the bootstrap page", () => {
     const live = processAgentStreamEvent({
       ...baseStreamInput,

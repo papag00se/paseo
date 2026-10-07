@@ -92,6 +92,59 @@ describe("applyStreamEvent", () => {
     expect((result.head[0] as ThoughtItem).text).toBe("Let me think...");
   });
 
+  it("continues a hydrated reasoning prefix without adding a second scrolling row", () => {
+    const prefix: ThoughtItem = {
+      kind: "thought",
+      id: "hydrated-thought",
+      text: "Let me ",
+      status: "ready",
+      timestamp: baseTimestamp,
+      timelineCursor: { epoch: "epoch-a", seq: 10 },
+    };
+    const result = applyStreamEvent({
+      tail: [prefix],
+      head: [],
+      event: reasoningChunk("think..."),
+      timestamp: baseTimestamp,
+      timelineCursor: { epoch: "epoch-a", seq: 11 },
+    });
+    expect(result.tail).toEqual([]);
+    expect(result.head).toEqual([
+      expect.objectContaining({
+        id: prefix.id,
+        text: "Let me think...",
+        status: "loading",
+        timelineCursor: { epoch: "epoch-a", seq: 11 },
+      }),
+    ]);
+  });
+
+  it("does not resume reasoning across a sequence gap or epoch replacement", () => {
+    const prefix: ThoughtItem = {
+      kind: "thought",
+      id: "old-thought",
+      text: "Previous turn",
+      status: "ready",
+      timestamp: baseTimestamp,
+      timelineCursor: { epoch: "epoch-a", seq: 10 },
+    };
+    for (const cursor of [
+      { epoch: "epoch-a", seq: 12 },
+      { epoch: "epoch-b", seq: 11 },
+    ]) {
+      const result = applyStreamEvent({
+        tail: [prefix],
+        head: [],
+        event: reasoningChunk("New thought"),
+        timestamp: baseTimestamp,
+        timelineCursor: cursor,
+      });
+      expect(result.tail).toEqual([prefix]);
+      expect(result.head).toHaveLength(1);
+      expect((result.head[0] as ThoughtItem).text).toBe("New thought");
+    }
+  });
+
   it("flushes reasoning to tail when tool call arrives", () => {
     let result = applyStreamEvent({
       tail: [],

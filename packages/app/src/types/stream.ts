@@ -1785,6 +1785,27 @@ function getTailAssistantToResume(params: {
   return params.tailAssistant;
 }
 
+function getTailThoughtToResume(
+  incomingKind: StreamItem["kind"] | null,
+  head: StreamItem[],
+  tail: StreamItem[],
+  cursor: TimelinePosition | undefined,
+): ThoughtItem | null {
+  const thought = tail.at(-1);
+  // Hydrated/cold prefixes live in tail. Only adjacent positioned reasoning may
+  // resume them: gaps or epoch changes cannot join a new turn to an old thought.
+  if (
+    incomingKind !== "thought" ||
+    head.length !== 0 ||
+    thought?.kind !== "thought" ||
+    !thought.timelineCursor ||
+    cursor?.epoch !== thought.timelineCursor.epoch ||
+    cursor.seq !== thought.timelineCursor.seq + 1
+  )
+    return null;
+  return thought;
+}
+
 /**
  * Flush head items to tail, avoiding duplicates.
  */
@@ -2020,6 +2041,19 @@ export function applyStreamEvent(params: {
   if (tailAssistant) {
     nextTail = nextTail.slice(0, -1);
     nextHead = [tailAssistant];
+    changedTail = true;
+    changedHead = true;
+  }
+
+  const tailThought = getTailThoughtToResume(
+    incomingKind,
+    nextHead,
+    nextTail,
+    params.timelineCursor,
+  );
+  if (tailThought) {
+    nextTail = nextTail.slice(0, -1);
+    nextHead = [tailThought];
     changedTail = true;
     changedHead = true;
   }

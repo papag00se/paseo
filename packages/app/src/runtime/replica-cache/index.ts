@@ -987,6 +987,11 @@ export class ReplicaCache {
       await this.prepareStore();
       while (this.activeServerIds.has(serverId)) {
         await this.flush();
+        // A failed persist restores pending writes. Retrying them here forever
+        // prevents cache preparation from settling, so authoritative chat loading
+        // never starts. Treat this as a cache miss; the scheduled writer retains
+        // the pending data and can recover independently of network bootstrap.
+        if (this.hasPendingHostChanges(serverId)) return [];
         const revision = this.hostRevisions.get(serverId) ?? 0;
         const rows = await this.rowStore.read(serverId, kinds, ids);
         if (this.canReadHostRevision(serverId, revision)) return rows;
