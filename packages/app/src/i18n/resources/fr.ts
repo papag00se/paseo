@@ -464,6 +464,7 @@ export const fr: TranslationResources = {
     fileActions: {
       openFile: "Ouvrir le fichier",
       openIn: "Ouvrir dans {{target}}",
+      openParentIn: "Ouvrir le dossier parent dans {{target}}",
       openToSide: "Ouvrir sur le côté",
       copyPath: "Copier le chemin",
       copyRelativePath: "Copier le chemin relatif",

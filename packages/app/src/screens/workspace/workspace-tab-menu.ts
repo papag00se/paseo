@@ -45,6 +45,7 @@ export type WorkspaceTabMenuEntry =
       icon?:
         | "copy"
         | "external-link"
+        | "folder-open"
         | "rotate-cw"
         | "arrow-left-to-line"
         | "arrow-right-to-line"
@@ -75,6 +76,8 @@ interface BuildWorkspaceTabMenuEntriesInput {
   onCopyFilePath: (path: string) => Promise<void> | void;
   onOpenFileInEditor?: (path: string) => Promise<void> | void;
   openInEditorLabel?: string;
+  onOpenFileParentInEditor?: (path: string) => Promise<void> | void;
+  openParentInEditorLabel?: string;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
@@ -94,6 +97,8 @@ interface BuildWorkspaceDesktopTabActionsInput {
   onCopyFilePath: (path: string) => Promise<void> | void;
   onOpenFileInEditor?: (path: string) => Promise<void> | void;
   openInEditorLabel?: string;
+  onOpenFileParentInEditor?: (path: string) => Promise<void> | void;
+  openParentInEditorLabel?: string;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
@@ -248,6 +253,18 @@ export function buildWorkspaceTabMenuEntries(
         },
       });
     }
+    if (input.onOpenFileParentInEditor && input.openParentInEditorLabel) {
+      entries.push({
+        kind: "item",
+        key: "open-file-parent-in-editor",
+        label: input.openParentInEditorLabel,
+        icon: "folder-open",
+        testID: `${menuTestIDBase}-open-file-parent-in-editor`,
+        onSelect: () => {
+          void input.onOpenFileParentInEditor?.(filePath);
+        },
+      });
+    }
     entries.push({
       kind: "item",
       key: "copy-file-path",
@@ -356,6 +373,8 @@ export function buildWorkspaceDesktopTabActions(
       onCopyFilePath: input.onCopyFilePath,
       onOpenFileInEditor: input.onOpenFileInEditor,
       openInEditorLabel: input.openInEditorLabel,
+      onOpenFileParentInEditor: input.onOpenFileParentInEditor,
+      openParentInEditorLabel: input.openParentInEditorLabel,
       onReloadAgent: input.onReloadAgent,
       onRenameTab: input.onRenameTab,
       onCloseTab: input.onCloseTab,

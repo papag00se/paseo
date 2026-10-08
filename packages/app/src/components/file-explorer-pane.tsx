@@ -116,6 +116,7 @@ interface TreeRowItemProps {
   onCopyPath: (path: string) => void;
   onCopyRelativePath: (path: string) => void;
   onOpenInEditor?: (entry: ExplorerEntry) => void;
+  onOpenParentInEditor?: (entry: ExplorerEntry) => void;
   editorTargetName?: string;
   onRevealEntry?: (entry: ExplorerEntry) => void;
   revealTargetName?: string;
@@ -242,6 +243,7 @@ function TreeRowItem({
   onCopyPath,
   onCopyRelativePath,
   onOpenInEditor,
+  onOpenParentInEditor,
   editorTargetName,
   onRevealEntry,
   revealTargetName,
@@ -299,6 +301,10 @@ function TreeRowItem({
   const handleOpenInEditor = useCallback(() => {
     onOpenInEditor?.(entry);
   }, [entry, onOpenInEditor]);
+
+  const handleOpenParentInEditor = useCallback(() => {
+    onOpenParentInEditor?.(entry);
+  }, [entry, onOpenParentInEditor]);
 
   const handleReveal = useCallback(() => {
     onRevealEntry?.(entry);
@@ -378,6 +384,7 @@ function TreeRowItem({
         fileKind={entry.kind}
         onPreview={!isDirectory && isRenderedMarkdownFile(entry.path) ? handlePress : undefined}
         onOpenInEditor={onOpenInEditor ? handleOpenInEditor : undefined}
+        onOpenParentInEditor={onOpenParentInEditor ? handleOpenParentInEditor : undefined}
         editorTargetName={editorTargetName}
         onCopyPath={handleCopy}
         onCopyRelativePath={handleCopyRelativePath}
@@ -630,6 +637,11 @@ export function FileExplorerPane({
       if (entry.kind === "directory") openDirectoryInEditor?.open(entry.path);
       else openDirectoryInEditor?.openFile({ path: entry.path });
     },
+    [openDirectoryInEditor],
+  );
+
+  const handleOpenParentInEditor = useCallback(
+    (entry: ExplorerEntry) => openDirectoryInEditor?.openParent(entry.path),
     [openDirectoryInEditor],
   );
 
@@ -985,6 +997,7 @@ export function FileExplorerPane({
           onCopyPath={handleCopyPath}
           onCopyRelativePath={handleCopyRelativePath}
           onOpenInEditor={openDirectoryInEditor ? handleOpenInEditor : undefined}
+          onOpenParentInEditor={openDirectoryInEditor ? handleOpenParentInEditor : undefined}
           editorTargetName={openDirectoryInEditor?.targetName}
           onRevealEntry={fileManagerTarget ? handleRevealEntry : undefined}
           revealTargetName={fileManagerTarget?.label}
@@ -1007,6 +1020,7 @@ export function FileExplorerPane({
       handleCopyPath,
       handleCopyRelativePath,
       handleOpenInEditor,
+      handleOpenParentInEditor,
       handleDeleteEntry,
       handleDownloadEntry,
       handleDraftCommit,
@@ -1457,6 +1471,7 @@ function TreeRowDispatcher({
   onCopyPath,
   onCopyRelativePath,
   onOpenInEditor,
+  onOpenParentInEditor,
   editorTargetName,
   onRevealEntry,
   revealTargetName,
@@ -1481,6 +1496,7 @@ function TreeRowDispatcher({
   onCopyPath: (path: string) => void | Promise<void>;
   onCopyRelativePath: (path: string) => void | Promise<void>;
   onOpenInEditor?: (entry: ExplorerEntry) => void;
+  onOpenParentInEditor?: (entry: ExplorerEntry) => void;
   editorTargetName?: string;
   onRevealEntry?: (entry: ExplorerEntry) => void;
   revealTargetName?: string;
@@ -1514,6 +1530,7 @@ function TreeRowDispatcher({
       onCopyPath={onCopyPath}
       onCopyRelativePath={onCopyRelativePath}
       onOpenInEditor={onOpenInEditor}
+      onOpenParentInEditor={onOpenParentInEditor}
       editorTargetName={editorTargetName}
       onRevealEntry={onRevealEntry}
       revealTargetName={revealTargetName}

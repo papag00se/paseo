@@ -406,6 +406,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (target: InlinePathTarget) => openInEditor?.openFile(target),
       [openInEditor],
     );
+    const handleOpenFileParentInEditor = useCallback(
+      (target: InlinePathTarget) => openInEditor?.openParent(target.path),
+      [openInEditor],
+    );
     const { requestDirectoryListing } = useFileExplorerActions({
       serverId: resolvedServerId,
       workspaceId: context.workspaceId,
@@ -730,6 +734,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             workspaceRoot={workspaceRoot}
             onOpenWorkspaceFile={handleInlinePathPress}
             onOpenWorkspaceFileInEditor={handleOpenFileInEditor}
+            onOpenWorkspaceFileParentInEditor={handleOpenFileParentInEditor}
             toast={toast}
           >
             <ChatFindExpansion messageId={getStreamItemMessageId(item)}>
@@ -755,6 +760,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         client,
         handleInlinePathPress,
         handleOpenFileInEditor,
+        handleOpenFileParentInEditor,
         resolvedServerId,
         toast,
         workspaceRoot,

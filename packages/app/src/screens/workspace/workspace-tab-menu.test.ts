@@ -234,6 +234,7 @@ describe("buildWorkspaceTabMenuEntries", () => {
   it("includes external-editor and copy-path actions for file tabs", () => {
     const onCopyFilePath = vi.fn();
     const onOpenFileInEditor = vi.fn();
+    const onOpenFileParentInEditor = vi.fn();
     const fileTab: WorkspaceTabDescriptor = {
       key: "file_abc",
       tabId: "file_abc",
@@ -252,6 +253,8 @@ describe("buildWorkspaceTabMenuEntries", () => {
       onCopyFilePath,
       onOpenFileInEditor,
       openInEditorLabel: "Open in VS Code",
+      onOpenFileParentInEditor,
+      openParentInEditorLabel: "Open parent in VS Code",
       onReloadAgent: vi.fn(),
       onRenameTab: vi.fn(),
       onCloseTab: vi.fn(),
@@ -261,7 +264,11 @@ describe("buildWorkspaceTabMenuEntries", () => {
     });
 
     const labels = entries.filter((entry) => entry.kind === "item").map((entry) => entry.label);
-    expect(labels.slice(0, 2)).toEqual(["Open in VS Code", "Copy file path"]);
+    expect(labels.slice(0, 3)).toEqual([
+      "Open in VS Code",
+      "Open parent in VS Code",
+      "Copy file path",
+    ]);
     expect(labels).not.toContain("Copy resume command");
     expect(labels).not.toContain("Copy agent id");
     expect(labels).not.toContain("Rename");
@@ -275,6 +282,16 @@ describe("buildWorkspaceTabMenuEntries", () => {
     }
     openInEditorEntry.onSelect();
     expect(onOpenFileInEditor).toHaveBeenCalledWith("/some/path.ts");
+
+    const openParentEntry = entries.find(
+      (entry) => entry.kind === "item" && entry.key === "open-file-parent-in-editor",
+    );
+    if (!openParentEntry || openParentEntry.kind !== "item") {
+      throw new Error("Open parent in editor entry missing");
+    }
+    openParentEntry.onSelect();
+    expect(onOpenFileParentInEditor).toHaveBeenCalledWith("/some/path.ts");
+    expect(onOpenFileInEditor).toHaveBeenCalledTimes(1);
 
     const copyFilePathEntry = entries.find(
       (entry) => entry.kind === "item" && entry.key === "copy-file-path",

@@ -463,6 +463,7 @@ export const ptBR: TranslationResources = {
     fileActions: {
       openFile: "Abrir arquivo",
       openIn: "Abrir no {{target}}",
+      openParentIn: "Abrir pasta pai no {{target}}",
       openToSide: "Abrir ao lado",
       copyPath: "Copiar caminho",
       copyRelativePath: "Copiar caminho relativo",

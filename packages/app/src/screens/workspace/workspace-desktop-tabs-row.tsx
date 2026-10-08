@@ -21,6 +21,7 @@ import {
   Rows2,
   Ellipsis,
   ExternalLink,
+  FolderOpen,
   Maximize,
   Minimize,
   Plus,
@@ -119,6 +120,7 @@ const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedX = withUnistyles(X);
 const ThemedCopy = withUnistyles(Copy);
 const ThemedExternalLink = withUnistyles(ExternalLink);
+const ThemedFolderOpen = withUnistyles(FolderOpen);
 
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
@@ -409,6 +411,8 @@ function TabContextMenuItem({
         return <ThemedCopy size={16} uniProps={mutedColorMapping} />;
       case "external-link":
         return <ThemedExternalLink size={16} uniProps={mutedColorMapping} />;
+      case "folder-open":
+        return <ThemedFolderOpen size={16} uniProps={mutedColorMapping} />;
       case "rotate-cw":
         return <ThemedRotateCw size={16} uniProps={mutedColorMapping} />;
       case "arrow-left-to-line":
@@ -540,6 +544,8 @@ interface ResolvedWorkspaceDesktopTabsRowProps extends Omit<WorkspaceDesktopTabs
   tabs: ResolvedWorkspaceDesktopTabRowItem[];
   openFileInEditor: ((path: string) => void) | null;
   openInEditorLabel: string | null;
+  openFileParentInEditor: ((path: string) => void) | null;
+  openParentInEditorLabel: string | null;
 }
 
 interface WorkspaceDesktopTabPresentationSlotProps {
@@ -953,6 +959,11 @@ export function WorkspaceDesktopTabsRow(props: WorkspaceDesktopTabsRowProps) {
     [openInEditor],
   );
   const openInEditorLabel = openInEditor ? `Open in ${openInEditor.targetName}` : null;
+  const openFileParentInEditor = useCallback(
+    (path: string) => openInEditor?.openParent(path),
+    [openInEditor],
+  );
+  const openParentInEditorLabel = openInEditor ? `Open parent in ${openInEditor.targetName}` : null;
   const [presentations, setPresentations] = useState(
     () => new Map<string, WorkspaceTabPresentation>(),
   );
@@ -1002,6 +1013,8 @@ export function WorkspaceDesktopTabsRow(props: WorkspaceDesktopTabsRowProps) {
         tabs={resolvedTabs}
         openFileInEditor={openInEditor ? openFileInEditor : null}
         openInEditorLabel={openInEditorLabel}
+        openFileParentInEditor={openInEditor ? openFileParentInEditor : null}
+        openParentInEditorLabel={openParentInEditorLabel}
       />
       {props.tabs.map(({ tab }) => (
         <WorkspaceDesktopTabPresentationSlot
@@ -1031,6 +1044,8 @@ function ResolvedWorkspaceDesktopTabsRow({
   onCopyFilePath,
   openFileInEditor,
   openInEditorLabel,
+  openFileParentInEditor,
+  openParentInEditorLabel,
   onReloadAgent,
   onRenameTab,
   onCloseTabsToLeft,
@@ -1289,6 +1304,8 @@ function ResolvedWorkspaceDesktopTabsRow({
           onCopyFilePath={onCopyFilePath}
           onOpenFileInEditor={openFileInEditor ?? undefined}
           openInEditorLabel={openInEditorLabel ?? undefined}
+          onOpenFileParentInEditor={openFileParentInEditor ?? undefined}
+          openParentInEditorLabel={openParentInEditorLabel ?? undefined}
           onReloadAgent={onReloadAgent}
           onRenameTab={onRenameTab}
           onCloseTabsToLeft={onCloseTabsToLeft}
@@ -1323,6 +1340,8 @@ function ResolvedWorkspaceDesktopTabsRow({
       onCopyResumeCommand,
       openFileInEditor,
       openInEditorLabel,
+      openFileParentInEditor,
+      openParentInEditorLabel,
       onNavigateTab,
       onReloadAgent,
       onRenameTab,
@@ -1440,6 +1459,8 @@ function ResolvedDesktopTabChip({
   onCopyFilePath,
   onOpenFileInEditor,
   openInEditorLabel,
+  onOpenFileParentInEditor,
+  openParentInEditorLabel,
   onReloadAgent,
   onRenameTab,
   onCloseTabsToLeft,
@@ -1468,6 +1489,8 @@ function ResolvedDesktopTabChip({
   onCopyFilePath: (path: string) => Promise<void> | void;
   onOpenFileInEditor?: (path: string) => Promise<void> | void;
   openInEditorLabel?: string;
+  onOpenFileParentInEditor?: (path: string) => Promise<void> | void;
+  openParentInEditorLabel?: string;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
@@ -1498,6 +1521,8 @@ function ResolvedDesktopTabChip({
         onCopyFilePath,
         onOpenFileInEditor,
         openInEditorLabel,
+        onOpenFileParentInEditor,
+        openParentInEditorLabel,
         onReloadAgent,
         onRenameTab,
         onCloseTab,
@@ -1519,6 +1544,8 @@ function ResolvedDesktopTabChip({
       onCopyResumeCommand,
       onOpenFileInEditor,
       openInEditorLabel,
+      onOpenFileParentInEditor,
+      openParentInEditorLabel,
       labels,
       onReloadAgent,
       onRenameTab,

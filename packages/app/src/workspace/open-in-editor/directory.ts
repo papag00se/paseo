@@ -5,7 +5,10 @@ import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-preferred-editor";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
-import { planWorkspaceOpenTargets } from "@/workspace/open-in-editor/planner";
+import {
+  planWorkspaceOpenTargets,
+  resolveParentDirectoryOpenInput,
+} from "@/workspace/open-in-editor/planner";
 
 interface UseOpenDirectoryInEditorInput {
   serverId: string;
@@ -16,6 +19,8 @@ interface OpenDirectoryInEditorAction {
   targetName: string;
   open: (directoryPath: string) => void;
   openFile: (file: WorkspaceFileLocation) => void;
+  /** Opens the folder containing `path` (a file or folder) in the editor. */
+  openParent: (path: string) => void;
 }
 
 export function useOpenDirectoryInEditor({
@@ -76,8 +81,19 @@ export function useOpenDirectoryInEditor({
     [openTarget],
   );
 
+  const openParent = useCallback(
+    (path: string) => {
+      const input = resolveParentDirectoryOpenInput({ path, workspaceDirectory });
+      if (input) {
+        openTarget(input);
+      }
+    },
+    [openTarget, workspaceDirectory],
+  );
+
   return useMemo(
-    () => (preferredTarget ? { targetName: preferredTarget.label, open, openFile } : null),
-    [open, openFile, preferredTarget],
+    () =>
+      preferredTarget ? { targetName: preferredTarget.label, open, openFile, openParent } : null,
+    [open, openFile, openParent, preferredTarget],
   );
 }

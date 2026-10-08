@@ -16,13 +16,14 @@ import {
   type AssistantFileLinkSource,
 } from "./resolver";
 
-type AssistantFileOpenDisposition = OpenFileDisposition | "editor";
+type AssistantFileOpenDisposition = OpenFileDisposition | "editor" | "editor-parent";
 
 export interface UseFileLinkResult {
   target: InlinePathTarget | null;
   onHoverIn: () => void;
   onPress: () => void;
   onOpenInEditor: () => void;
+  onOpenParentInEditor: () => void;
   open: (source: AssistantFileLinkSource, disposition: AssistantFileOpenDisposition) => void;
 }
 
@@ -125,6 +126,9 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
   const onOpenInEditor = useStableEvent(() => {
     open(stableSource, "editor");
   });
+  const onOpenParentInEditor = useStableEvent(() => {
+    open(stableSource, "editor-parent");
+  });
 
   const target = useMemo(() => {
     if (resolution.kind === "resolved") {
@@ -134,8 +138,8 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
   }, [query.data, resolution]);
 
   return useMemo(
-    () => ({ target, onHoverIn, onPress, onOpenInEditor, open }),
-    [target, onHoverIn, onOpenInEditor, onPress, open],
+    () => ({ target, onHoverIn, onPress, onOpenInEditor, onOpenParentInEditor, open }),
+    [target, onHoverIn, onOpenInEditor, onOpenParentInEditor, onPress, open],
   );
 }
 
@@ -308,6 +312,10 @@ async function dispatchFileTarget(input: {
   }
   if (input.disposition === "editor") {
     current.onOpenWorkspaceFileInEditor?.(input.target);
+    return;
+  }
+  if (input.disposition === "editor-parent") {
+    current.onOpenWorkspaceFileParentInEditor?.(input.target);
     return;
   }
   current.onOpenWorkspaceFile?.(input.target, input.disposition);

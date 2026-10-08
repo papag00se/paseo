@@ -57,6 +57,7 @@ interface FileActionsContextMenuContentProps {
   onOpenFile?: () => void;
   onPreview?: () => void;
   onOpenInEditor?: () => void;
+  onOpenParentInEditor?: () => void;
   editorTargetName?: string;
   onOpenToSide?: () => void;
   onCopyPath?: () => void;
@@ -88,6 +89,7 @@ export function FileActionsContextMenuContent({
   onOpenFile,
   onPreview,
   onOpenInEditor,
+  onOpenParentInEditor,
   editorTargetName,
   onOpenToSide,
   onCopyPath,
@@ -121,6 +123,19 @@ export function FileActionsContextMenuContent({
           }
         : null,
     [editorTargetName, onOpenInEditor, t],
+  );
+  const openParentInEditorAction = useMemo<FileAction | null>(
+    () =>
+      onOpenParentInEditor && editorTargetName
+        ? {
+            key: "open-parent-in-editor",
+            group: "open",
+            label: t("workspace.fileActions.openParentIn", { target: editorTargetName }),
+            icon: FolderOpen,
+            onSelect: onOpenParentInEditor,
+          }
+        : null,
+    [editorTargetName, onOpenParentInEditor, t],
   );
   const actions = useMemo<FileAction[]>(() => {
     const availableFile = fileKind === "file" && fileExists;
@@ -168,6 +183,7 @@ export function FileActionsContextMenuContent({
         icon: FileText,
       }),
       openInEditorAction,
+      openParentInEditorAction,
       optionalFileAction(availableFile, onOpenToSide, {
         key: "open-to-side",
         group: "open",
@@ -298,6 +314,7 @@ export function FileActionsContextMenuContent({
     onOpenFile,
     onPreview,
     openInEditorAction,
+    openParentInEditorAction,
     onOpenToSide,
     onRename,
     onReveal,

@@ -176,6 +176,28 @@ function planForgeOpenTarget(input: {
   };
 }
 
+/**
+ * Resolves the folder that contains `path` for "Open parent in editor". Returns `{}` when the
+ * parent is the workspace root, `{ directoryPath }` for a workspace-relative parent folder, and
+ * null when there is no parent inside the workspace to open.
+ */
+export function resolveParentDirectoryOpenInput(input: {
+  path: string;
+  workspaceDirectory: string;
+}): { directoryPath?: string } | null {
+  const resolved = resolveWorkspaceFilePaths({
+    path: input.path,
+    workspaceRoot: input.workspaceDirectory,
+  });
+  if (!resolved?.relativePath) {
+    return null;
+  }
+  const separatorIndex = resolved.relativePath.lastIndexOf("/");
+  return separatorIndex > 0
+    ? { directoryPath: resolved.relativePath.slice(0, separatorIndex) }
+    : {};
+}
+
 export function planWorkspaceOpenTargets(
   input: PlanWorkspaceOpenTargetsInput,
 ): PlannedWorkspaceOpenTarget[] {

@@ -1,7 +1,7 @@
 import { useMemo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { Platform, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { ExternalLink } from "lucide-react-native";
+import { ExternalLink, FolderOpen } from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
 import { MarkdownTextSpan } from "@/components/markdown-text";
 import { MarkdownLinkText } from "@/components/markdown/link-text";
@@ -30,6 +30,8 @@ interface AssistantMarkdownLinkProps {
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const openInEditorLeading = <ThemedExternalLink size={14} uniProps={mutedColorMapping} />;
+const ThemedFolderOpen = withUnistyles(FolderOpen);
+const openParentInEditorLeading = <ThemedFolderOpen size={14} uniProps={mutedColorMapping} />;
 
 const MARKDOWN_CODE_LINK_DATASET = {
   ...CODE_SURFACE_DATASET,
@@ -42,7 +44,7 @@ export function AssistantMarkdownLink({
   monoSurface,
   children,
 }: AssistantMarkdownLinkProps) {
-  const { target, onHoverIn, onPress, onOpenInEditor } = useFileLink(source);
+  const { target, onHoverIn, onPress, onOpenInEditor, onOpenParentInEditor } = useFileLink(source);
   const { configRef } = useAssistantFileLinkResolverContext();
   const workspaceRoot = configRef.current.workspaceRoot;
   const tooltipPath = useMemo(
@@ -118,6 +120,9 @@ export function AssistantMarkdownLink({
       <ContextMenuContent align="start" width={220}>
         <ContextMenuItem leading={openInEditorLeading} onSelect={onOpenInEditor}>
           Open in Editor…
+        </ContextMenuItem>
+        <ContextMenuItem leading={openParentInEditorLeading} onSelect={onOpenParentInEditor}>
+          Open Parent in Editor…
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

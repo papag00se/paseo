@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planWorkspaceOpenTargets } from "./planner";
+import { planWorkspaceOpenTargets, resolveParentDirectoryOpenInput } from "./planner";
 
 const desktopTargets = [
   {
@@ -232,5 +232,52 @@ describe("planWorkspaceOpenTargets", () => {
     });
 
     expect(targets.map((target) => target.id)).toEqual(["github"]);
+  });
+});
+
+describe("resolveParentDirectoryOpenInput", () => {
+  it("returns the containing folder for nested relative and absolute paths", () => {
+    expect(
+      resolveParentDirectoryOpenInput({ path: "src/app/main.ts", workspaceDirectory: "/repo" }),
+    ).toEqual({ directoryPath: "src/app" });
+    expect(
+      resolveParentDirectoryOpenInput({ path: "/repo/src/app", workspaceDirectory: "/repo" }),
+    ).toEqual({ directoryPath: "src" });
+  });
+
+  it("opens the workspace root for top-level entries", () => {
+    expect(
+      resolveParentDirectoryOpenInput({ path: "README.md", workspaceDirectory: "/repo" }),
+    ).toEqual({});
+    expect(
+      resolveParentDirectoryOpenInput({ path: "/repo/README.md", workspaceDirectory: "/repo" }),
+    ).toEqual({});
+  });
+
+  it("refuses the workspace root itself and paths outside the workspace", () => {
+    expect(resolveParentDirectoryOpenInput({ path: "/repo", workspaceDirectory: "/repo" })).toBe(
+      null,
+    );
+    expect(
+      resolveParentDirectoryOpenInput({ path: "/elsewhere/a/b.ts", workspaceDirectory: "/repo" }),
+    ).toBe(null);
+  });
+
+  it("plans a desktop open of the parent folder", () => {
+    const input = resolveParentDirectoryOpenInput({
+      path: "src/app/main.ts",
+      workspaceDirectory: "/repo",
+    });
+    const [target] = planWorkspaceOpenTargets({
+      workspaceDirectory: "/repo",
+      ...input,
+      desktopTargets: desktopTargets.slice(0, 1),
+      canUseDesktopBridge: true,
+      isLocalExecution: true,
+    });
+    expect(target?.source === "desktop" ? target.openInput : null).toEqual({
+      editorId: "vscode",
+      workspacePath: "/repo/src/app",
+    });
   });
 });

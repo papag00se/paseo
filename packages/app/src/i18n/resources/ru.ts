@@ -463,6 +463,7 @@ export const ru: TranslationResources = {
     fileActions: {
       openFile: "Открыть файл",
       openIn: "Открыть в {{target}}",
+      openParentIn: "Открыть родительскую папку в {{target}}",
       openToSide: "Открыть сбоку",
       copyPath: "Копировать путь",
       copyRelativePath: "Копировать относительный путь",
