@@ -1,0 +1,58 @@
+{
+  "databases": [
+    {
+      "name": "paseo-project-icon-cache",
+      "version": 1
+    },
+    {
+      "name": "paseo-replica-row-store",
+      "version": 1
+    }
+  ],
+  "errors": [
+    {
+      "key": [
+        "srv_yXGLrwx8IztQ",
+        "timeline",
+        "2635e08f-9b46-4cf8-a79e-1c8d5d9f5466"
+      ],
+      "name": "UnknownError",
+      "message": "Failed to read large IndexedDB value"
+    },
+    {
+      "key": [
+        "srv_yXGLrwx8IztQ",
+        "timeline",
+        "b562603f-1e51-4b2e-bca4-0695ddbde078"
+      ],
+      "name": "UnknownError",
+      "message": "Failed to read large IndexedDB value"
+    }
+  ],
+  "counts": {
+    "timeline": 43,
+    "agent": 64,
+    "checkpoint": 1,
+    "project": 24,
+    "workspace": 23
+  },
+  "stores": [
+    "meta",
+    "rows"
+  ],
+  "keyPath": [
+    "serverId",
+    "kind",
+    "id"
+  ],
+  "schemaVersion": 1,
+  "keyCount": 157,
+  "estimate": {
+    "quota": 33094531928,
+    "usage": 16370520,
+    "usageDetails": {
+      "indexedDB": 16370520
+    }
+  },
+  "newWrite": "success"
+}

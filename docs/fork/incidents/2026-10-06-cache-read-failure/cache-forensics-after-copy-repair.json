@@ -1,0 +1,10 @@
+{
+  "profile": "isolated copy only",
+  "removed": [
+    "2635e08f-9b46-4cf8-a79e-1c8d5d9f5466",
+    "b562603f-1e51-4b2e-bca4-0695ddbde078"
+  ],
+  "readAll": "success",
+  "rowCount": 155,
+  "rewriteAll": "success"
+}
