@@ -1,8 +1,10 @@
 # CLAUDE.md
 
+> **Fork:** this is Jesse's fork. Preserve its additions when merging upstream releases. Build/install steps and plugin repos are documented in [docs/fork/README.md](docs/fork/README.md). Record new fork changes there.
+
 Paseo is a mobile app for monitoring and controlling your local AI coding agents from anywhere. Your dev environment, in your pocket. Connects directly to your actual development environment — your code stays on your machine.
 
-**Supported agents:** Claude Code, Codex, GitHub Copilot, OpenCode, and Pi.
+**Supported agents:** Claude Code, Codex, GitHub Copilot, OpenCode, Pi, Antigravity, and Muse Code.
 
 ## Repository map
 
