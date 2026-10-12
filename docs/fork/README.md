@@ -18,6 +18,10 @@ List the original additions with `git log --oneline 818658520..67e0f55dd`. Compa
 
 The 0.11.2 merge keeps Momentum inside upstream's shared hover-card component and retains the wider card. Project groups coexist with upstream's sidebar separators. Startup failure stops Momentum and clears upstream's local credential. Native Markdown keeps the fork's scroll container; desktop still uses Crossnote.
 
+## Pi prompt preflight
+
+Pi can summarize a large saved conversation before acknowledging the next prompt. The fork excludes prompt acceptance from the 60-second control-plane timeout, matching the existing explicit-compaction contract. Otherwise Paseo reports failure while Pi continues the original prompt, inviting duplicate work. Regression coverage waits five simulated minutes and checks that process exit and session close still reject pending prompts. State-query timeouts remain bounded.
+
 ## Build and install the desktop app
 
 ```bash

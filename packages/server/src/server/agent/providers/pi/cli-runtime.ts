@@ -113,11 +113,18 @@ class PiCliRuntimeSession implements PiRuntimeSession {
     message: string,
     images?: Array<{ type: "image"; data: string; mimeType: string }>,
   ): Promise<PiPromptAck> {
-    const { id: requestId, promise } = this.process.startRequest({
-      type: "prompt",
-      message,
-      ...(images?.length ? { images } : {}),
-    });
+    // Pi acknowledges only after preflight, which can compact a large saved
+    // conversation or execute an extension command. A control-plane deadline
+    // would report failure while that work continues and the prompt later runs.
+    // Process exit and session close still reject the pending request.
+    const { id: requestId, promise } = this.process.startRequest(
+      {
+        type: "prompt",
+        message,
+        ...(images?.length ? { images } : {}),
+      },
+      JSONL_RPC_NO_TIMEOUT,
+    );
     const data = await promise;
     if (typeof data === "object" && data !== null && !Array.isArray(data)) {
       const { agentInvoked } = data as Record<string, unknown>;

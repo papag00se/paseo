@@ -331,6 +331,57 @@ describe("PiCliRuntime", () => {
     }
   });
 
+  test("prompt waits for preflight compaction beyond the configured RPC timeout", async () => {
+    vi.useFakeTimers();
+    const child = createPiChild();
+    const pendingPrompt = capturePendingCommand(child, "prompt");
+    const session = await createRuntime(child, [], { requestTimeoutMs: 60_000 }).startSession({
+      cwd: "/workspace/project",
+    });
+    const events: unknown[] = [];
+    session.onEvent((event) => events.push(event));
+
+    try {
+      const promptPromise = session.prompt("Continue the existing task");
+      const result = promptPromise.then(
+        (ack) => ({ ack }),
+        (error: unknown) => ({ error }),
+      );
+      const command = await pendingPrompt;
+      child.stdout.write(
+        `${JSON.stringify({ type: "auto_compaction_start", reason: "threshold" })}\n`,
+      );
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      child.stdout.write(`${JSON.stringify({ type: "auto_compaction_end", aborted: false })}\n`);
+      writePiResponse(child, command, { disposition: "started" });
+
+      await expect(result).resolves.toEqual({ ack: { requestId: expect.any(String) } });
+      expect(events).toEqual([
+        { type: "auto_compaction_start", reason: "threshold" },
+        { type: "auto_compaction_end", aborted: false },
+      ]);
+      expect(child.killedSignals).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+      await session.close();
+    }
+  });
+
+  test.each(["close", "exit"])("pending prompt still rejects on session %s", async (failure) => {
+    const child = createPiChild();
+    const pendingPrompt = capturePendingCommand(child, "prompt");
+    const session = await createRuntime(child).startSession({ cwd: "/workspace/project" });
+    const promptPromise = session.prompt("Continue the existing task");
+    const rejection = expect(promptPromise).rejects.toThrow(
+      failure === "close" ? "Pi RPC session is closed" : "Pi RPC process exited",
+    );
+    await pendingPrompt;
+    if (failure === "close") await session.close();
+    else child.emit("exit", 1, null);
+    await rejection;
+    await session.close();
+  });
+
   test("compact waits beyond the default control-plane timeout for a late response", async () => {
     vi.useFakeTimers();
     const child = createPiChild();
