@@ -20,7 +20,7 @@ The 0.11.2 merge keeps Momentum inside upstream's shared hover-card component an
 
 ## Model picker policy
 
-Jesse wants only the newest version of each Claude/OpenAI model family. The workhorse defaults are newest Opus for Claude and Pi, and newest Sol for Codex. New family names are included automatically; if either workhorse family disappears, review its replacement rather than silently defaulting to the most expensive model. Existing agents keep their chosen models. Other Pi providers, including local/router models, are unchanged.
+Jesse wants only the newest version of each Claude/OpenAI model family. The workhorse defaults are newest Opus for Claude and Pi, and newest Sol for Codex. New family names are included automatically; if either workhorse family disappears, review its replacement rather than silently defaulting to the most expensive model. Existing agents keep their chosen models. OmniRoute exposes only Free, Best Coding, Smart, and the local Qwen route; its internal failover connections are not deleted. Both Paseo's model list and Pi's custom-model definitions follow that four-route policy. Other Pi providers are unchanged.
 
 `scripts/fork/ai-stack-upgrade.sh` owns the installed `~/.local/bin/ai-stack-upgrade` launcher. It runs `curate-models.mjs --apply` after CLI/catalog updates. After a manual CLI or custom Paseo update, run `ai-stack-upgrade --models-only` too. This refreshes the lists and Pi's startup default without performing any software or system update.
 

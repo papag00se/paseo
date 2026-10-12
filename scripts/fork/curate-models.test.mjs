@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { curateCatalogs, latestModels, updatedSettings } from "./curate-models.mjs";
+import {
+  curateCatalogs,
+  curatePiModelDefinitions,
+  latestModels,
+  updatedSettings,
+} from "./curate-models.mjs";
 
 const model = (id) => ({
   id,
@@ -26,7 +31,7 @@ function catalogs() {
         "openai-codex/gpt-6.1-sol",
         "openai-codex/gpt-6-luna",
         "openai-codex/gpt-5.3-codex-spark",
-        "omniroute/auto/coding",
+        "omniroute/auto/smart",
       ].map(model),
     },
   };
@@ -76,7 +81,7 @@ test("Pi mirrors latest native families, defaults to Opus, and keeps router mode
     false,
   );
   assert.equal(
-    result.pi.some((m) => m.id === "omniroute/auto/coding"),
+    result.pi.some((m) => m.id === "omniroute/auto/smart"),
     true,
   );
   assert.deepEqual(result.pi[0].thinkingOptions, [{ id: "high", label: "High", isDefault: true }]);
@@ -99,6 +104,51 @@ test("a refreshed Pi catalog advances native Claude before its manifest updates"
     false,
   );
   assert.equal(result.claude.find((m) => m.id === "claude-opus-5-6").thinkingOptions, undefined);
+});
+
+test("OmniRoute shows only the four requested routes without altering other providers", () => {
+  const input = catalogs();
+  input.pi.models.push(
+    ...["free", "auto/best-coding", "vllm/qwen3.8-27b", "auto/best-fast", "groq/other"].map((id) =>
+      model(`omniroute/${id}`),
+    ),
+  );
+  input.pi.models.push(model("local/my-model"));
+  const result = curateCatalogs(input);
+  assert.deepEqual(
+    result.pi
+      .filter((m) => m.id.startsWith("omniroute/"))
+      .map((m) => m.id)
+      .sort(),
+    [
+      "omniroute/free",
+      "omniroute/auto/best-coding",
+      "omniroute/auto/smart",
+      "omniroute/vllm/qwen3.8-27b",
+    ].sort(),
+  );
+  assert.equal(
+    result.pi.some((m) => m.id === "local/my-model"),
+    true,
+  );
+  const definitions = {
+    providers: {
+      omniroute: {
+        baseUrl: "http://localhost:20128/v1",
+        apiKey: "!credential-command",
+        models: ["free", "auto/best-coding", "auto/smart", "vllm/qwen3.8-27b", "auto/coding"].map(
+          model,
+        ),
+      },
+      local: { models: [model("mine")] },
+    },
+  };
+  const original = structuredClone(definitions);
+  const next = curatePiModelDefinitions(definitions);
+  assert.deepEqual(definitions, original);
+  assert.equal(next.providers.omniroute.models.length, 4);
+  assert.equal(next.providers.omniroute.apiKey, "!credential-command");
+  assert.deepEqual(next.providers.local, definitions.providers.local);
 });
 
 test("missing Pi Opus or missing workhorse stops the entire plan", () => {

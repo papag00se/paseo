@@ -9,10 +9,26 @@ import {
   renameSync,
   chmodSync,
   statSync,
+  existsSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+export const OMNIROUTE_ROUTE_IDS = new Set([
+  "free",
+  "auto/best-coding",
+  "auto/smart",
+  "vllm/qwen3.8-27b",
+]);
+
+export function curatePiModelDefinitions(definitions) {
+  const next = structuredClone(definitions);
+  const provider = next.providers?.omniroute;
+  if (provider?.models)
+    provider.models = provider.models.filter((m) => OMNIROUTE_ROUTE_IDS.has(m.id));
+  return next;
+}
 
 export function modelClass(id, provider) {
   const base = id.replace(/\[1m\]$/, "").replace(/-\d{8}$/, "");
@@ -83,10 +99,11 @@ export function curateCatalogs(catalogs) {
     ...claude.map((m) => `anthropic/${m.id}`),
     ...codex.map((m) => `openai-codex/${m.id}`),
   ]);
-  // Do not alter local/router providers. Only Anthropic and Codex are in this policy.
-  const pi = catalogs.pi.models.filter(
-    (m) => !/^(anthropic|openai-codex)\//.test(m.id) || wanted.has(m.id),
-  );
+  const pi = catalogs.pi.models.filter((m) => {
+    if (m.id.startsWith("omniroute/"))
+      return OMNIROUTE_ROUTE_IDS.has(m.id.slice("omniroute/".length));
+    return !/^(anthropic|openai-codex)\//.test(m.id) || wanted.has(m.id);
+  });
   const piDefault = `anthropic/${claudeDefault}`;
   if (!pi.some((m) => m.id === piDefault))
     throw new Error(`Pi cannot use ${piDefault}; no configuration changed`);
@@ -162,6 +179,14 @@ async function main() {
   const piPath = resolve(homedir(), ".pi/agent/settings.json");
   const configText = readFileSync(configPath, "utf8");
   const piText = readFileSync(piPath, "utf8");
+  const definitionsPath = resolve(homedir(), ".pi/agent/models.json");
+  const definitionsText = existsSync(definitionsPath)
+    ? readFileSync(definitionsPath, "utf8")
+    : undefined;
+  const definitions =
+    definitionsText === undefined
+      ? undefined
+      : curatePiModelDefinitions(JSON.parse(definitionsText));
   const config = JSON.parse(configText);
   const catalogs = await discoverCatalogs(config);
   const models = curateCatalogs(catalogs);
@@ -179,13 +204,20 @@ async function main() {
   chmodSync(state, 0o700);
   copyFileSync(configPath, resolve(state, "paseo-config.before.json"));
   copyFileSync(piPath, resolve(state, "pi-settings.before.json"));
+  if (definitionsText !== undefined)
+    copyFileSync(definitionsPath, resolve(state, "pi-models.before.json"));
   writeFileSync(resolve(state, "catalogs.json"), JSON.stringify(catalogs, null, 2));
   writeFileSync(resolve(state, "models.json"), JSON.stringify(models, null, 2));
-  // Check both originals before either write, so concurrent edits fail without mutation.
-  if (readFileSync(configPath, "utf8") !== configText || readFileSync(piPath, "utf8") !== piText)
+  // Check all originals before writing, so concurrent edits fail without mutation.
+  if (
+    readFileSync(configPath, "utf8") !== configText ||
+    readFileSync(piPath, "utf8") !== piText ||
+    (definitionsText !== undefined && readFileSync(definitionsPath, "utf8") !== definitionsText)
+  )
     throw new Error("Configuration changed during discovery");
   replaceJson(configPath, next.config, configText);
   replaceJson(piPath, next.piSettings, piText);
+  if (definitionsText !== undefined) replaceJson(definitionsPath, definitions, definitionsText);
   const output = execFileSync(resolve(homedir(), ".local/bin/paseo"), ["reload", "--json"], {
     encoding: "utf8",
     timeout: 60_000,
