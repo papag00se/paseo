@@ -18,6 +18,14 @@ List the original additions with `git log --oneline 818658520..67e0f55dd`. Compa
 
 The 0.11.2 merge keeps Momentum inside upstream's shared hover-card component and retains the wider card. Project groups coexist with upstream's sidebar separators. Startup failure stops Momentum and clears upstream's local credential. Native Markdown keeps the fork's scroll container; desktop still uses Crossnote.
 
+## Model picker policy
+
+Jesse wants only the newest version of each Claude/OpenAI model family. The workhorse defaults are newest Opus for Claude and Pi, and newest Sol for Codex. New family names are included automatically; if either workhorse family disappears, review its replacement rather than silently defaulting to the most expensive model. Existing agents keep their chosen models. Other Pi providers, including local/router models, are unchanged.
+
+`scripts/fork/ai-stack-upgrade.sh` owns the installed `~/.local/bin/ai-stack-upgrade` launcher. It runs `curate-models.mjs --apply` after CLI/catalog updates. After a manual CLI or custom Paseo update, run `ai-stack-upgrade --models-only` too. This refreshes the lists and Pi's startup default without performing any software or system update.
+
+The curator creates independent provider clients with model overrides removed, so a previous curated list cannot hide the next release. Claude also includes newly available Anthropic IDs from Pi's refreshed catalog, without copying Pi-specific effort settings to the Claude CLI. Config/session settings are backed up under `~/.local/state/ai-stack-upgrade/model-curation-*` before atomic writes and `paseo reload`; no daemon restart or inference request is needed. Run its focused tests with `node --test scripts/fork/curate-models.test.mjs`.
+
 ## Pi prompt preflight
 
 Pi can summarize a large saved conversation before acknowledging the next prompt. The fork excludes prompt acceptance from the 60-second control-plane timeout, matching the existing explicit-compaction contract. Otherwise Paseo reports failure while Pi continues the original prompt, inviting duplicate work. Regression coverage waits five simulated minutes and checks that process exit and session close still reject pending prompts. State-query timeouts remain bounded.
