@@ -3,11 +3,11 @@ import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
 import { z } from "zod";
+import { openMarkdownFilePreview } from "./request";
 import { Button } from "@/components/ui/button";
 import { usePaneContext } from "@/panels/pane-context";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
-import { resolveWorkspaceFilePaths } from "@/workspace/file-open";
 
 // Crossnote is served from a separate loopback origin. Same-origin access inside
 // that frame is needed for its revision-checked edits; it cannot access Paseo's DOM.
@@ -15,7 +15,6 @@ const PREVIEW_SANDBOX =
   "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox";
 const frameStyle = { flex: 1, width: "100%", height: "100%", minHeight: 0, border: 0 } as const;
 const frameTheme = (theme: Theme) => ({ colorScheme: theme.colorScheme });
-const previewResponse = z.object({ url: z.string().url(), hostname: z.string() });
 const navigationMessage = z.object({
   type: z.literal("paseo.markdown.open"),
   path: z.string().min(1),
@@ -58,10 +57,7 @@ export function FileMarkdownPreview(_props: { source: string }) {
   const { serverId, workspaceId, target } = usePaneContext();
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const root = useWorkspaceDirectory(serverId, workspaceId);
-  const filePath =
-    target.kind === "file" && root
-      ? resolveWorkspaceFilePaths({ path: target.path, workspaceRoot: root })?.relativePath
-      : null;
+  const filePath = target.kind === "file" ? target.path : null;
   const [attempt, setAttempt] = useState(0);
   const [preview, setPreview] = useState<PreviewState>({ kind: "loading" });
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
@@ -77,26 +73,18 @@ export function FileMarkdownPreview(_props: { source: string }) {
     async function open() {
       try {
         if (!client) throw new Error("The Markdown preview host is disconnected.");
-        if (!filePath)
-          throw new Error("Crossnote preview requires a Markdown file inside this workspace.");
-        const response = previewResponse.parse(
-          await client.invokePluginRpc("markdown-preview", "preview.open", {
-            workspaceId,
-            filePath,
-            embedded: true,
-          }),
-        );
-        sessionUrl = response.url;
+        if (!filePath) throw new Error("Choose a Markdown file to preview.");
+        const url = await openMarkdownFilePreview(client, {
+          workspaceId,
+          workspaceRoot: root ?? null,
+          path: filePath,
+        });
+        sessionUrl = url;
         if (cancelled) {
-          release(response.url);
+          release(url);
           return;
         }
-        const url = new URL(response.url);
-        if (url.searchParams.get("embedded") !== "1" || url.searchParams.get("file") !== filePath)
-          throw new Error("Update the Markdown Preview plugin to enable file-tab previews.");
-        if (url.protocol !== "http:" || url.hostname !== "127.0.0.1")
-          throw new Error("Invalid Crossnote preview address.");
-        if (!cancelled) setPreview({ kind: "ready", url: response.url });
+        setPreview({ kind: "ready", url });
       } catch (error) {
         if (!cancelled)
           setPreview({
@@ -110,7 +98,7 @@ export function FileMarkdownPreview(_props: { source: string }) {
       cancelled = true;
       if (sessionUrl) release(sessionUrl);
     };
-  }, [client, workspaceId, filePath, attempt]);
+  }, [client, workspaceId, root, filePath, attempt]);
   if (preview.kind === "ready")
     return <ThemedCrossnoteFrame url={preview.url} uniProps={frameTheme} />;
   return (
@@ -120,10 +108,7 @@ export function FileMarkdownPreview(_props: { source: string }) {
       </Text>
       {preview.kind === "error" ? (
         <>
-          <Text style={styles.message}>
-            Install the updated Markdown Preview plugin on the local desktop host, then retry.
-            Source remains available in the file toolbar.
-          </Text>
+          <Text style={styles.message}>Source remains available in the file toolbar.</Text>
           <Button variant="outline" size="sm" onPress={retry}>
             Retry preview
           </Button>
