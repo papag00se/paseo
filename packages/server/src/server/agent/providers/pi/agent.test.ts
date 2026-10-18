@@ -2840,9 +2840,9 @@ describe("PiRpcAgentClient", () => {
 
   test.each<PiThinkingCatalogCase>([
     {
-      name: "no thinking map",
+      name: "no thinking map does not confirm minimal support",
       model: { ...RESTRICTED_THINKING_MODEL, thinkingLevelMap: undefined },
-      optionIds: ["off", "minimal", "low", "medium", "high"],
+      optionIds: ["off", "low", "medium", "high"],
       defaultThinkingOptionId: "medium",
     },
     {
@@ -2860,8 +2860,68 @@ describe("PiRpcAgentClient", () => {
         ...RESTRICTED_THINKING_MODEL,
         thinkingLevelMap: { xhigh: "extra-high", max: "maximum" },
       },
-      optionIds: ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+      optionIds: ["off", "low", "medium", "high", "xhigh", "max"],
       defaultThinkingOptionId: "medium",
+    },
+    {
+      name: "minimal aliases the implicit low mapping",
+      model: {
+        ...RESTRICTED_THINKING_MODEL,
+        thinkingLevelMap: { minimal: "low" },
+      },
+      optionIds: ["off", "low", "medium", "high"],
+      defaultThinkingOptionId: "medium",
+    },
+    {
+      name: "minimal aliases a provider-specific low mapping",
+      model: {
+        ...RESTRICTED_THINKING_MODEL,
+        thinkingLevelMap: {
+          off: "none",
+          minimal: "light",
+          low: "light",
+          medium: "balanced",
+          high: "deep",
+          xhigh: "extra-high",
+          max: "maximum",
+        },
+      },
+      optionIds: ["off", "low", "medium", "high", "xhigh", "max"],
+      defaultThinkingOptionId: "medium",
+    },
+    {
+      name: "a genuinely distinct minimal effort",
+      model: {
+        ...RESTRICTED_THINKING_MODEL,
+        thinkingLevelMap: {
+          off: "none",
+          minimal: "minimal",
+          low: "low",
+          medium: "medium",
+          high: "high",
+          xhigh: null,
+          max: null,
+        },
+      },
+      optionIds: ["off", "minimal", "low", "medium", "high"],
+      defaultThinkingOptionId: "medium",
+    },
+    {
+      name: "minimal is the only supported choice",
+      model: {
+        ...RESTRICTED_THINKING_MODEL,
+        thinkingLevelMap: {
+          off: null,
+          minimal: "low",
+          low: null,
+          medium: null,
+          high: null,
+          xhigh: null,
+          max: null,
+        },
+      },
+      optionIds: ["minimal"],
+      defaultThinkingOptionId: "minimal",
     },
     {
       name: "only lower thinking levels",
@@ -2869,7 +2929,7 @@ describe("PiRpcAgentClient", () => {
         ...RESTRICTED_THINKING_MODEL,
         thinkingLevelMap: { medium: null, high: null },
       },
-      optionIds: ["off", "minimal", "low"],
+      optionIds: ["off", "low"],
       defaultThinkingOptionId: "low",
     },
     {

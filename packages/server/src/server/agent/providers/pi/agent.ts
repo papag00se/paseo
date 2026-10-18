@@ -1099,16 +1099,28 @@ function resolvePiThinkingConfig(
     return { thinkingOptions: undefined, defaultThinkingOptionId: undefined };
   }
 
-  const supportedOptions = PI_THINKING_OPTIONS.filter((option) => {
+  const availableOptions = PI_THINKING_OPTIONS.filter((option) => {
     const mapped = model.thinkingLevelMap?.[option.id];
     if (mapped === null) {
       return false;
     }
-    if (option.id === "xhigh" || option.id === "max") {
+    if (option.id === "minimal" || option.id === "xhigh" || option.id === "max") {
       return mapped !== undefined;
     }
     return true;
   });
+  // Keep accepting saved Pi levels, but do not offer Minimal as a duplicate of
+  // another available native effort (for example, minimal -> low on Codex).
+  const supportedOptions = availableOptions.filter(
+    (option) =>
+      option.id !== "minimal" ||
+      !availableOptions.some(
+        (other) =>
+          other.id !== option.id &&
+          (model.thinkingLevelMap?.[other.id] ?? other.id) ===
+            (model.thinkingLevelMap?.[option.id] ?? option.id),
+      ),
+  );
   const defaultIndex = PI_THINKING_OPTIONS.findIndex(
     (option) => option.id === DEFAULT_PI_THINKING_LEVEL,
   );
