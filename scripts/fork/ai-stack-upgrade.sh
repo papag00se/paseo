@@ -107,7 +107,7 @@ for m in d.get("models", d) if isinstance(d, dict) else d:
     if m.get("slug"): print(m["slug"])' 2>/dev/null) || codex_models=""
 [[ -z $codex_models ]] && failed+=("codex debug models")
 
-pi_models=$(pi --list-models openai-codex 2>/dev/null | awk '$1 == "openai-codex" {print $2}')
+pi_models=$(pi --list-models 2>/dev/null | awk '$1 == "openai-codex" || $1 == "openai" {print $2}')
 [[ -z $pi_models ]] && failed+=("pi --list-models")
 
 # --- Curated model choices and defaults --------------------------------------

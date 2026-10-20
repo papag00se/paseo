@@ -78,6 +78,9 @@ function profileModel(model, defaultId) {
   return result;
 }
 
+const PI_OPENAI_PREFIXES = ["openai-codex", "openai"];
+const PI_CURATED_PREFIX = new RegExp(`^(anthropic|${PI_OPENAI_PREFIXES.join("|")})/`);
+
 export function curateCatalogs(catalogs) {
   // Pi refreshes Anthropic's catalog independently of Paseo releases. Include
   // newly published IDs even before the native Claude manifest knows them.
@@ -95,14 +98,16 @@ export function curateCatalogs(catalogs) {
   const codex = latestModels(catalogs.codex.models, "codex", "sol");
   const claudeDefault = claude.find((m) => m.isDefault).id;
   const codexDefault = codex.find((m) => m.isDefault).id;
+  // Pi has exposed the ChatGPT subscription under both `openai-codex/` and
+  // `openai/`; curate the OpenAI families under whichever prefix it uses.
   const wanted = new Set([
     ...claude.map((m) => `anthropic/${m.id}`),
-    ...codex.map((m) => `openai-codex/${m.id}`),
+    ...PI_OPENAI_PREFIXES.flatMap((prefix) => codex.map((m) => `${prefix}/${m.id}`)),
   ]);
   const pi = catalogs.pi.models.filter((m) => {
     if (m.id.startsWith("omniroute/"))
       return OMNIROUTE_ROUTE_IDS.has(m.id.slice("omniroute/".length));
-    return !/^(anthropic|openai-codex)\//.test(m.id) || wanted.has(m.id);
+    return !PI_CURATED_PREFIX.test(m.id) || wanted.has(m.id);
   });
   const piDefault = `anthropic/${claudeDefault}`;
   if (!pi.some((m) => m.id === piDefault))

@@ -37,6 +37,20 @@ function catalogs() {
   };
 }
 
+test("Pi's ChatGPT models under the openai/ prefix are curated like openai-codex/", () => {
+  const input = catalogs();
+  input.pi.models = input.pi.models.map((m) =>
+    model(m.id.replace(/^openai-codex\//, "openai/")),
+  );
+  input.pi.models.push(model("openai/gpt-4o"), model("openai/o3"));
+  const ids = curateCatalogs(input).pi.map((m) => m.id);
+  assert.equal(ids.includes("openai/gpt-6.1-sol"), true);
+  assert.equal(ids.includes("openai/gpt-6-astra"), true);
+  assert.equal(ids.includes("openai/gpt-6-sol"), false);
+  assert.equal(ids.includes("openai/gpt-4o"), false);
+  assert.equal(ids.includes("openai/o3"), false);
+});
+
 test("latest versions compare numerically and discard dated/context duplicates", () => {
   const selected = latestModels(
     [
