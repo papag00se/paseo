@@ -18,6 +18,10 @@ List the original additions with `git log --oneline 818658520..67e0f55dd`. Compa
 
 The 0.11.2 merge keeps Momentum inside upstream's shared hover-card component and retains the wider card. Project groups coexist with upstream's sidebar separators. Startup failure stops Momentum and clears upstream's local credential. Native Markdown keeps the fork's scroll container; desktop still uses Crossnote. External desktop file tabs require the Markdown Preview plugin's `preview.file.open` contract; workspace tabs keep their existing preview behavior. The file-grant boundaries and linked-resource limits are owned by the [plugin reference](https://github.com/papag00se/paseo-markdown-preview/blob/main/docs/REFERENCE.md#desktop-file-tab-contract).
 
+## Actions policy
+
+This fork keeps tests local-only, including packaged desktop smoke tests previously invoked by release hooks. Build, package, lint, type and deployment guards remain. See [testing](../testing.md#where-tests-run) for the contributor policy and the disabled mixed-workflow delivery caveat.
+
 ## Model picker policy
 
 Jesse wants only the newest version of each Claude/OpenAI model family. The workhorse defaults are newest Opus for Claude and Pi, and newest Sol for Codex. New family names are included automatically; if either workhorse family disappears, review its replacement rather than silently defaulting to the most expensive model. Existing agents keep their chosen models. OmniRoute exposes only Free, Best Coding, Smart, and the local Qwen route; its internal failover connections are not deleted. Both Paseo's model list and Pi's custom-model definitions follow that four-route policy. Other Pi providers are unchanged.

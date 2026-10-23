@@ -1,5 +1,11 @@
 # Testing
 
+## Where tests run
+
+Run tests locally only. GitHub Actions must not run unit, integration, browser, packaged-app smoke or other tests, including through package lifecycle scripts, composite actions and build hooks. Keep local test commands runnable. Actions retain builds, packaging, dependency checks and deployment guards. Remove obsolete required test checks instead of adding passing placeholders.
+
+Mixed workflows remain disabled remotely until their test-free source reaches the default branch; an `agent` branch push alone does not make default-branch builds safe to re-enable.
+
 ## Philosophy
 
 Tests prove behavior, not structure. Every test should answer: "what user-visible or API-visible behavior does this verify?"

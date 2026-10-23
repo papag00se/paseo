@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { matchesGlob, relative as relativePath } from "node:path";
 import test from "node:test";
+import { parse as parseYaml } from "yaml";
 
 const repoRoot = new URL("../", import.meta.url);
 const ciWorkflowPath = new URL(".github/workflows/ci.yml", repoRoot);
@@ -11,42 +12,8 @@ const filtersPath = new URL(".github/ci-paths.yml", repoRoot);
 const serverTsconfigPath = new URL("packages/server/tsconfig.server.json", repoRoot);
 const desktopPackagePath = new URL("packages/desktop/package.json", repoRoot);
 
-const gatedCiJobs = new Map([
-  ["format", { name: "format", contract: "format" }],
-  ["lint", { name: "lint", contract: "quality" }],
-  ["typecheck", { name: "typecheck", contract: "quality" }],
-  ["server-tests-ubuntu", { name: "server-tests (ubuntu-latest)", contracts: ["server", "hub"] }],
-  ["server-tests-windows", { name: "server-tests (windows-latest)", contracts: ["server", "hub"] }],
-  ["server-tests-macos", { name: "server-tests (macos-14, file observation)", contract: "server" }],
-  ["desktop-tests-ubuntu", { name: "desktop-tests (ubuntu-latest)", contract: "desktop" }],
-  ["desktop-tests-windows", { name: "desktop-tests (windows-latest)", contract: "desktop" }],
-  ["app-tests", { name: "app-tests", contract: "app" }],
-  ["sdk-tests", { name: "sdk-tests", contract: "sdk" }],
-  ["playwright-1", { name: "playwright (shard 1/4)", contract: "browser" }],
-  ["playwright-2", { name: "playwright (shard 2/4)", contract: "browser" }],
-  ["playwright-3", { name: "playwright (shard 3/4)", contract: "browser" }],
-  ["playwright-4", { name: "playwright (shard 4/4)", contract: "browser" }],
-  ["relay-tests", { name: "relay-tests", contract: "relay" }],
-  ["cli-tests-1", { name: "cli-tests (shard 1/3)", contract: "cli" }],
-  ["cli-tests-2", { name: "cli-tests (shard 2/3)", contract: "cli" }],
-  ["cli-tests-3", { name: "cli-tests (shard 3/3)", contract: "cli" }],
-]);
-
-function jobBlocks(source) {
-  const jobs = new Map();
-  let currentJob;
-
-  for (const line of source.split("\n")) {
-    const jobMatch = /^  ([a-z0-9-]+):\s*$/.exec(line);
-    if (jobMatch) {
-      currentJob = jobMatch[1];
-      jobs.set(currentJob, []);
-      continue;
-    }
-    if (currentJob) jobs.get(currentJob).push(line);
-  }
-  return jobs;
-}
+// Tests stay locally runnable; hosted checks retain build/quality promises only.
+const qualityJobs = ["format", "lint", "typecheck"];
 
 function loadFilters(path) {
   const filters = {};
@@ -79,24 +46,20 @@ function filesUnder(relativeDirectory, predicate) {
     .sort();
 }
 
-test("gated checks are statically named jobs with real job-level gating", () => {
-  const workflowSource = readFileSync(ciWorkflowPath, "utf8");
-  const jobs = jobBlocks(workflowSource);
-  const trigger = workflowSource.split("jobs:", 1)[0];
-
-  assert.match(trigger, /^\s+merge_group:\s*$/m);
-  assert.doesNotMatch(workflowSource, /strategy:\s*\n\s+matrix:/);
-  assert.doesNotMatch(workflowSource, /RUN_TESTS|Skip unaffected|No .* changes detected/);
-
-  for (const [jobId, expected] of gatedCiJobs) {
-    const job = jobs.get(jobId)?.join("\n");
-    assert.ok(job, `missing static job ${jobId}`);
-    assert.match(job, new RegExp(`^    name: ${expected.name.replace(/[()]/g, "\\$&")}$`, "m"));
-    assert.match(job, /needs\.changes\.outputs\.full != 'false'/);
-    for (const contract of expected.contracts ?? [expected.contract]) {
-      assert.match(job, new RegExp(`needs\\.changes\\.outputs\\.${contract} != 'false'`));
-    }
+test("quality checks keep stable names and real commands without test-job dependencies", () => {
+  const workflow = parseYaml(readFileSync(ciWorkflowPath, "utf8"));
+  assert.ok("merge_group" in workflow.on);
+  for (const id of qualityJobs) {
+    const job = workflow.jobs[id];
+    assert.equal(job.name, id);
+    assert.equal(job.needs, undefined);
+    assert.ok(
+      job.steps.some((step) =>
+        step.run?.includes(`npm run ${id === "format" ? "format:check" : id}`),
+      ),
+    );
   }
+  assert.ok(workflow.jobs.typecheck.steps.some((step) => step.run === "npm run build:server"));
 });
 
 test("change gating allows superseded workflow runs to cancel", () => {
@@ -110,24 +73,102 @@ test("change gating allows superseded workflow runs to cancel", () => {
   }
 });
 
-test("focused contracts stay inside existing required checks", () => {
-  const jobs = jobBlocks(readFileSync(ciWorkflowPath, "utf8"));
-  const changes = jobs.get("changes")?.join("\n") ?? "";
-  const server = jobs.get("server-tests-ubuntu")?.join("\n") ?? "";
-  const desktop = jobs.get("desktop-tests-ubuntu")?.join("\n") ?? "";
+test("focused contracts remain available locally rather than as required Actions tests", () => {
+  const scripts = JSON.parse(readFileSync(desktopPackagePath, "utf8")).scripts;
+  for (const name of ["test", "test:e2e:renderer", "test:e2e:browser-tabs"]) {
+    assert.ok(scripts[name], `local desktop command ${name}`);
+  }
+  const server = JSON.parse(
+    readFileSync(new URL("packages/server/package.json", repoRoot), "utf8"),
+  );
+  assert.ok(server.scripts["test:hub-cli-contract"]);
+  assert.ok(
+    readFileSync(new URL("scripts/daemon-launch-contract.test.mjs", repoRoot), "utf8").length,
+  );
+});
 
-  assert.match(changes, /scripts\/daemon-launch-contract\.test\.mjs/);
-  assert.doesNotMatch(changes, /Install dependencies|npm run build/);
+// Inspect executable YAML fields, then follow npm scripts and their lifecycle
+// hooks. Labels are deliberately irrelevant: renaming a test step cannot hide it.
+function assertNoHostedTests(workflow, packages, seen = new Set()) {
+  function command(source, owner = packages.get("root")) {
+    assert.doesNotMatch(source, /\b(?:vitest|jest)\s+(?:run|--)/);
+    assert.doesNotMatch(source, /\bplaywright\s+test\b|\bnode\s+[^\n;&]*--test\b/);
+    assert.doesNotMatch(source, /\bnpm\s+(?:run\s+)?test(?=[:\s]|$)/);
+    assert.doesNotMatch(source, /(?:^|\s)(?:[^\s]*\/)?e2e\/[^\s]+\.(?:m?js|sh)\b/);
+    assert.doesNotMatch(source, /\.\/result\/bin\/paseo\s+daemon\s+run/);
+    const workspace = /--workspace(?:=|\s+)([^\s]+)/.exec(source)?.[1];
+    const selected = workspace ? packages.get(workspace) : owner;
+    assert.ok(selected, `unknown workspace in ${source}`);
+    for (const match of source.matchAll(/\bnpm\s+(?:--prefix\s+\.\.\/\.\.\s+)?run\s+([\w:-]+)/g)) {
+      const scriptOwner = match[0].includes("--prefix") ? packages.get("root") : selected;
+      for (const name of [`pre${match[1]}`, match[1], `post${match[1]}`]) {
+        const body = scriptOwner.scripts?.[name];
+        if (!body) continue;
+        const key = `${scriptOwner.name}:${name}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        command(body, scriptOwner);
+      }
+    }
+  }
+  function visit(value) {
+    if (!value || typeof value !== "object") return;
+    for (const [key, item] of Object.entries(value)) {
+      if (key === "run" && typeof item === "string") command(item);
+      if (key === "env" && item) assert.notEqual(String(item.PASEO_DESKTOP_SMOKE), "1");
+      visit(item);
+    }
+  }
+  visit(workflow);
+  // npm ci also runs workspace/root installation hooks, not just named builds.
+  for (const pkg of new Set(packages.values())) {
+    for (const name of ["preinstall", "install", "postinstall", "prepare"]) {
+      if (pkg.scripts?.[name]) command(pkg.scripts[name], pkg);
+    }
+  }
+}
 
-  assert.match(server, /test:hub-cli-contract/);
-  assert.match(server, /npm run test --workspace=@getpaseo\/server/);
-  assert.ok(!jobs.has("hub-cli-contract"));
+function policyPackages() {
+  const packages = new Map();
+  for (const path of [
+    "package.json",
+    ...filesUnder("packages", (candidate) => /^packages\/[^/]+\/package\.json$/.test(candidate)),
+  ]) {
+    const pkg = JSON.parse(readFileSync(new URL(path, repoRoot), "utf8"));
+    packages.set(path === "package.json" ? "root" : pkg.name, pkg);
+  }
+  return packages;
+}
 
-  assert.match(desktop, /test:e2e:renderer/);
-  assert.match(desktop, /test:e2e:browser-tabs/);
-  assert.match(desktop, /npm run test --workspace=@getpaseo\/desktop/);
-  assert.ok(!jobs.has("desktop-browser-bridge"));
-  assert.ok(!jobs.has("playwright-desktop"));
+test("all executable workflow and composite fields follow the local-only test policy", () => {
+  const packages = policyPackages();
+  for (const path of filesUnder(".github", (candidate) => /\.(?:yaml|yml)$/.test(candidate))) {
+    assertNoHostedTests(parseYaml(readFileSync(new URL(path, repoRoot), "utf8")), packages);
+  }
+});
+
+test("hosted policy rejects renamed npm tests, lifecycle tests and packaging smoke opt-ins", () => {
+  const packages = policyPackages();
+  packages.get("root").scripts["verify:renamed"] = "node --test scripts/example.mjs";
+  for (const run of [
+    "npm run verify:renamed",
+    "npx vitest run",
+    "npm run test:e2e --workspace=@getpaseo/app",
+  ]) {
+    assert.throws(() => assertNoHostedTests({ jobs: { renamed: { steps: [{ run }] } } }, packages));
+  }
+  assert.throws(() =>
+    assertNoHostedTests(
+      {
+        jobs: {
+          release: { steps: [{ run: "npm run build:desktop", env: { PASEO_DESKTOP_SMOKE: "1" } }] },
+        },
+      },
+      packages,
+    ),
+  );
+  packages.get("root").scripts.postinstall = "npm run verify:renamed";
+  assert.throws(() => assertNoHostedTests({ jobs: {} }, packages));
 });
 
 test("server builds exclude test utilities at every domain depth", () => {
@@ -322,14 +363,14 @@ test("packaging runs on main without allocating pull-request runners", () => {
   }
 });
 
-test("desktop packaging smokes main pushes and only the pull requests that touch packaging", () => {
+test("desktop packaging builds main pushes and only the pull requests that touch packaging", () => {
   const source = readFileSync(new URL(".github/workflows/desktop-packages.yml", repoRoot), "utf8");
   const trigger = source.split("jobs:", 1)[0];
   assert.match(trigger, /push:\s*\n\s+branches: \[main\]/);
   assert.match(trigger, /pull_request:\s*\n\s+branches: \[main\]\s*\n\s+paths:/);
   assert.match(trigger, /- "packages\/desktop\/\*\*"/);
   assert.doesNotMatch(source, /dorny\/paths-filter/);
-  for (const action of ["actions/checkout", "actions/setup-node", "actions/upload-artifact"]) {
+  for (const action of ["actions/checkout", "actions/setup-node"]) {
     assert.match(source, new RegExp(`${action}@[0-9a-f]{40} # v\\d+\\.\\d+\\.\\d+`));
   }
 });
