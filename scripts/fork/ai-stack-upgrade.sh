@@ -6,7 +6,7 @@
 #   Codex, Pi, Claude CLIs  mise-managed "latest"        -> mise upgrade
 #   Pi               extensions + model catalogs         -> pi update --extensions / --models
 #   Model choices    newest of each Claude/Codex family -> curated Paseo lists, without a restart
-#   Defaults         Claude/Pi: Opus; Codex: Sol        -> refreshed from full catalogs
+#   Defaults         Claude/Pi: Opus; Codex: Terra      -> refreshed from full catalogs
 #   Codex            live model list from OpenAI         -> codex debug models (also refreshes its cache)
 #   OmniRoute        patched Docker image                -> ~/Work/omniroute/update-patched-omniroute.sh
 #   Paseo            curated lists are hot-reloaded; its custom build is not replaced here.
@@ -111,7 +111,7 @@ pi_models=$(pi --list-models 2>/dev/null | awk '$1 == "openai-codex" || $1 == "o
 [[ -z $pi_models ]] && failed+=("pi --list-models")
 
 # --- Curated model choices and defaults --------------------------------------
-step "Newest model per family (Claude/Pi: Opus; Codex: Sol)"
+step "Newest model per family (Claude/Pi: Opus; Codex: Terra)"
 run "refresh curated models" "$CURATE_MODELS" --apply
 
 # --- OmniRoute ---------------------------------------------------------------
