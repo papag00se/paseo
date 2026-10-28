@@ -205,14 +205,22 @@ export function migrateProviderSettings(
   return ProviderOverridesSchema.parse(migrated);
 }
 
-// Env vars that indicate a running Claude Code session. If the daemon itself is
-// launched from inside Claude Code (e.g. by a Paseo agent), these leak into
-// child processes and cause "cannot be launched inside another session" errors.
+// Env vars that identify a running agent session. If the daemon itself is
+// launched from inside an agent (e.g. a Paseo agent restarting Paseo), these
+// leak into every child: Claude Code refuses to launch "inside another
+// session", and tools keyed on the Pi session id (per-agent browser tabs)
+// treat unrelated agents as the same session.
 const PARENT_SESSION_ENV_VARS = [
   "CLAUDECODE",
   "CLAUDE_CODE_ENTRYPOINT",
   "CLAUDE_CODE_SSE_PORT",
   "CLAUDE_AGENT_SDK_VERSION",
+  "PI_CODING_AGENT",
+  "PI_SESSION_ID",
+  "PI_SESSION_FILE",
+  "PI_PROVIDER",
+  "PI_MODEL",
+  "PI_REASONING_LEVEL",
 ];
 
 export interface ProviderEnvOptions {
