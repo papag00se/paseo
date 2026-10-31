@@ -265,6 +265,23 @@ describe("createProviderEnv", () => {
     expect(env.CLAUDE_AGENT_SDK_VERSION).toBeUndefined();
     expect(env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING).toBe("true");
   });
+
+  test("strips a parent Pi session identity but keeps Pi configuration", () => {
+    const base = {
+      PATH: "/usr/bin",
+      PI_CODING_AGENT: "true",
+      PI_SESSION_ID: "parent-session",
+      PI_SESSION_FILE: "/tmp/parent.jsonl",
+      PI_CODING_AGENT_DIR: "/home/me/.pi/agent",
+    };
+
+    const env = createProviderEnv({ baseEnv: base });
+
+    expect(env.PI_CODING_AGENT).toBeUndefined();
+    expect(env.PI_SESSION_ID).toBeUndefined();
+    expect(env.PI_SESSION_FILE).toBeUndefined();
+    expect(env.PI_CODING_AGENT_DIR).toBe("/home/me/.pi/agent");
+  });
 });
 
 describe("ProviderOverrideSchema", () => {

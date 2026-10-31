@@ -30,8 +30,6 @@ fi
 rm -rf "$DIR/app.old"
 mv -T "$DIR/app" "$DIR/app.old"
 mv -T "$DIR/app.new" "$DIR/app"
-# Compatibility link for the old install path is no longer needed once nothing runs from it.
-[ -L "$OPT/paseo-crossnote-2c3ab1d10" ] && rm "$OPT/paseo-crossnote-2c3ab1d10"
 
 echo "Swapped. Relaunching Paseo..."
 setsid -f "$DIR/app/Paseo" >/dev/null 2>&1 < /dev/null

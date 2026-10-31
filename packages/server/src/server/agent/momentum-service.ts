@@ -26,8 +26,8 @@ const MAX_CONTEXT_CHARS = 6_000;
 const STARTUP_LIMIT = 25;
 const RECENT_ACTIVITY_MS = 30 * 24 * 60 * 60 * 1_000;
 const DEFAULT_MOMENTUM_PROVIDERS = [
-  { provider: "pi", model: "openai-codex/gpt-5.6-luna", thinkingOptionId: "low" },
-  { provider: "pi", model: "anthropic/claude-haiku-4-5", thinkingOptionId: "low" },
+  { provider: "pi", model: "openai/gpt-6.1-terra", thinkingOptionId: "low" },
+  { provider: "pi", model: "anthropic/claude-haiku-5-5", thinkingOptionId: "low" },
 ];
 
 export class MomentumService {

@@ -1,6 +1,6 @@
 # Jesse's Paseo fork
 
-`papag00se/paseo` merges upstream `getpaseo/paseo` 0.11.2 (`v0.11.2`) into the existing fork history. The desktop app in `~/.local/opt/paseo/app` is built from this repo's `main`. Plugins live in their own repos (listed below), not here.
+`papag00se/paseo` merges upstream `getpaseo/paseo` 0.14.0 (`v0.14.0`) into the existing fork history. The desktop app in `~/.local/opt/paseo/app` is built from this repo's `main`. Plugins live in their own repos (listed below), not here.
 
 ## Preserved fork changes
 
@@ -11,16 +11,20 @@
 | Git panel          | `4a17290c0` `ceffedbdf` `bd2de2063` `41d7d092e` `ddfc88f50` | Stage files, stash single files, controlled commits; diff rows refresh when staging changes.                                                                                                                                                                                                   |
 | Git diffs (server) | `38471b154` `5c85ae8f9`                                     | Parse diffs made with `diff.mnemonicPrefix`; disambiguate no-prefix renames.                                                                                                                                                                                                                   |
 | Momentum           | `dd7a96fa3` `3e9307060` `fb379a604` `830a130d1` `5a1c49f87` | Per-workspace agent summaries with refresh; subagents excluded; explains when nothing is active.                                                                                                                                                                                               |
-| Markdown tabs      | `2c3ab1d10` `f00dba24e` `b6f2685e7`                         | Crossnote renderer for desktop Markdown tabs and a Preview context action; explicitly opened external files use single-document plugin grants.                                                                                                                                                 |
+| Markdown tabs      | retired in the 0.14.0 merge                                 | Upstream Markdown/HTML tabs own Preview and Source views, and plugins contribute file panels; the Markdown Preview plugin now registers a `markdown` file panel instead of the fork overlay.                                                                                                   |
 | Cache recovery     | `d1da0a67a`                                                 | One unreadable cached conversation no longer blocks all timeline loading; reasoning chunks merge into one Thinking card. Upstream's `syncPending` now owns rejected-write recovery; the fork's regression tests remain. See [incident](incidents/2026-10-06-cache-read-failure/ROOT-CAUSE.md). |
 
-List the original additions with `git log --oneline 818658520..67e0f55dd`. Compare the current fork against upstream with `git diff v0.11.2..main`.
+List the original additions with `git log --oneline 818658520..67e0f55dd`. Compare the current fork against upstream with `git diff v0.14.0..main`.
 
-The 0.11.2 merge keeps Momentum inside upstream's shared hover-card component and retains the wider card. Project groups coexist with upstream's sidebar separators. Startup failure stops Momentum and clears upstream's local credential. Native Markdown keeps the fork's scroll container; desktop still uses Crossnote. External desktop file tabs require the Markdown Preview plugin's `preview.file.open` contract; workspace tabs keep their existing preview behavior. The file-grant boundaries and linked-resource limits are owned by the [plugin reference](https://github.com/papag00se/paseo-markdown-preview/blob/main/docs/REFERENCE.md#desktop-file-tab-contract).
+The 0.11.2 merge keeps Momentum inside upstream's shared hover-card component and retains the wider card. Project groups coexist with upstream's sidebar separators. Startup failure stops Momentum and clears upstream's local credential. The 0.14.0 merge keeps the fork's chat-link **Open in Editor** actions in upstream's new link renderer, uses each project's chosen editor, and extends staging actions to the new **All changes** diff mode.
+
+## Actions policy
+
+This fork keeps tests local-only, including packaged desktop smoke tests previously invoked by release hooks. Build, package, lint, type and deployment guards remain. See [testing](../testing.md#where-tests-run) for the contributor policy and the disabled mixed-workflow delivery caveat.
 
 ## Model picker policy
 
-Jesse wants only the newest version of each Claude/OpenAI model family. The workhorse defaults are newest Opus for Claude and Pi, and newest Sol for Codex. New family names are included automatically; if either workhorse family disappears, review its replacement rather than silently defaulting to the most expensive model. Existing agents keep their chosen models. OmniRoute exposes only Free, Best Coding, Smart, and the local Qwen route; its internal failover connections are not deleted. Both Paseo's model list and Pi's custom-model definitions follow that four-route policy. Other Pi providers are unchanged.
+Jesse wants only the newest version of each Claude/OpenAI model family. The workhorse defaults are newest Opus for Claude and Pi, and newest Terra for Codex (`CODEX_WORKHORSE_FAMILY` in `scripts/fork/curate-models.mjs`). New family names are included automatically; if either workhorse family disappears, review its replacement rather than silently defaulting to the most expensive model. Existing agents keep their chosen models. OmniRoute exposes only Free, Best Coding, Smart, and the local Qwen route; its internal failover connections are not deleted. Both Paseo's model list and Pi's custom-model definitions follow that four-route policy. Other Pi providers are unchanged.
 
 `scripts/fork/ai-stack-upgrade.sh` owns the installed `~/.local/bin/ai-stack-upgrade` launcher. It runs `curate-models.mjs --apply` after CLI/catalog updates. After a manual CLI or custom Paseo update, run `ai-stack-upgrade --models-only` too. This refreshes the lists and Pi's startup default without performing any software or system update.
 

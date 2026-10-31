@@ -15,6 +15,9 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Codex workhorse family: the second-tier default, not the priciest tier (owner, 2026-10-27: Terra).
+export const CODEX_WORKHORSE_FAMILY = "terra";
+
 export const OMNIROUTE_ROUTE_IDS = new Set([
   "free",
   "auto/best-coding",
@@ -95,7 +98,7 @@ export function curateCatalogs(catalogs) {
       label: m.label.replace(/^anthropic\//, ""),
     }));
   const claude = latestModels([...catalogs.claude.models, ...discoveredClaude], "claude", "opus");
-  const codex = latestModels(catalogs.codex.models, "codex", "sol");
+  const codex = latestModels(catalogs.codex.models, "codex", CODEX_WORKHORSE_FAMILY);
   const claudeDefault = claude.find((m) => m.isDefault).id;
   const codexDefault = codex.find((m) => m.isDefault).id;
   // Pi has exposed the ChatGPT subscription under both `openai-codex/` and

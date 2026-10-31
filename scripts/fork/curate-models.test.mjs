@@ -19,7 +19,9 @@ function catalogs() {
         model,
       ),
     },
-    codex: { models: ["gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6-luna"].map(model) },
+    codex: {
+      models: ["gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna"].map(model),
+    },
     pi: {
       models: [
         "anthropic/claude-fable-5-1",
@@ -29,6 +31,7 @@ function catalogs() {
         "openai-codex/gpt-6-astra",
         "openai-codex/gpt-6-sol",
         "openai-codex/gpt-6.1-sol",
+        "openai-codex/gpt-6.1-terra",
         "openai-codex/gpt-6-luna",
         "openai-codex/gpt-5.3-codex-spark",
         "omniroute/auto/smart",
@@ -39,9 +42,7 @@ function catalogs() {
 
 test("Pi's ChatGPT models under the openai/ prefix are curated like openai-codex/", () => {
   const input = catalogs();
-  input.pi.models = input.pi.models.map((m) =>
-    model(m.id.replace(/^openai-codex\//, "openai/")),
-  );
+  input.pi.models = input.pi.models.map((m) => model(m.id.replace(/^openai-codex\//, "openai/")));
   input.pi.models.push(model("openai/gpt-4o"), model("openai/o3"));
   const ids = curateCatalogs(input).pi.map((m) => m.id);
   assert.equal(ids.includes("openai/gpt-6.1-sol"), true);
@@ -84,7 +85,7 @@ test("new families appear automatically and newest Sol beats 6 even if listed la
 test("Pi mirrors latest native families, defaults to Opus, and keeps router models", () => {
   const result = curateCatalogs(catalogs());
   assert.equal(result.claude.find((m) => m.isDefault).id, "claude-opus-5-5");
-  assert.equal(result.codex.find((m) => m.isDefault).id, "gpt-6.1-sol");
+  assert.equal(result.codex.find((m) => m.isDefault).id, "gpt-6.1-terra");
   assert.equal(result.pi.find((m) => m.isDefault).id, "anthropic/claude-opus-5-5");
   assert.equal(
     result.pi.some((m) => m.id === "openai-codex/gpt-6-sol"),
@@ -204,19 +205,19 @@ test("settings preserve unrelated overrides, remove stale additions, and do not 
 test("each update replaces prior curated versions using a fresh catalog", () => {
   const first = updatedSettings({}, {}, curateCatalogs(catalogs()));
   const second = catalogs();
-  second.codex.models.push(model("gpt-6.2-sol"));
-  second.pi.models.push(model("openai-codex/gpt-6.2-sol"));
+  second.codex.models.push(model("gpt-6.2-terra"));
+  second.pi.models.push(model("openai-codex/gpt-6.2-terra"));
   const next = updatedSettings(first.config, first.piSettings, curateCatalogs(second));
   assert.equal(
     next.config.agents.providers.codex.models.find((m) => m.isDefault).id,
-    "gpt-6.2-sol",
+    "gpt-6.2-terra",
   );
   assert.equal(
-    next.config.agents.providers.codex.models.some((m) => m.id === "gpt-6.1-sol"),
+    next.config.agents.providers.codex.models.some((m) => m.id === "gpt-6.1-terra"),
     false,
   );
   assert.equal(
-    next.config.agents.providers.pi.models.some((m) => m.id === "openai-codex/gpt-6.1-sol"),
+    next.config.agents.providers.pi.models.some((m) => m.id === "openai-codex/gpt-6.1-terra"),
     false,
   );
 });
