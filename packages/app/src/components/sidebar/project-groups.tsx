@@ -8,7 +8,9 @@ import React, {
   type ReactNode,
   type Ref,
 } from "react";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { Text, View, type PressableStateCallbackType } from "react-native";
+import { PressHighlight } from "@/components/ui/press-highlight";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import {
   ChevronDown,
   ChevronRight,
@@ -52,10 +54,6 @@ const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted })
 const foregroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const editGroupLeading = <ThemedPencil size={14} uniProps={mutedMapping} />;
 const deleteGroupLeading = <ThemedTrash2 size={14} uniProps={mutedMapping} />;
-const headerButtonStyle = ({ pressed }: PressableStateCallbackType) => [
-  styles.headerButton,
-  pressed && styles.pressed,
-];
 const groupMainStyle = ({ pressed }: PressableStateCallbackType) => [
   styles.groupMain,
   pressed && styles.pressed,
@@ -65,16 +63,9 @@ export function NewProjectGroupButton(): ReactElement {
   const openEditor = useSidebarProjectGroupsStore((state) => state.openEditor);
   const open = useCallback(() => openEditor("new"), [openEditor]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="New project group"
-      hitSlop={8}
-      onPress={open}
-      style={headerButtonStyle}
-      testID="sidebar-new-project-group"
-    >
+    <ToolbarButton label="New project group" onPress={open} testID="sidebar-new-project-group">
       <ThemedFolderPlus size={15} uniProps={mutedMapping} />
-    </Pressable>
+    </ToolbarButton>
   );
 }
 
@@ -153,7 +144,7 @@ export function ProjectGroupBlock({
       style={[styles.groupBlock, isDragging && styles.groupBlockDragging]}
     >
       <ProjectGroupDraggableRow dragHandleProps={group ? dragHandleProps : undefined}>
-        <Pressable
+        <PressHighlight
           accessibilityRole="button"
           accessibilityLabel={`${collapsed ? "Expand" : "Collapse"} ${name}`}
           delayLongPress={200}
@@ -178,7 +169,7 @@ export function ProjectGroupBlock({
             {name}
           </Text>
           <Text style={styles.groupCount}>{projects.length}</Text>
-        </Pressable>
+        </PressHighlight>
         {group ? (
           <DropdownMenu compactMode="sheet">
             <DropdownMenuTrigger
@@ -297,7 +288,6 @@ export function SidebarProjectGroupModals(): ReactElement {
         onClose={closeEditor}
         header={editorHeader}
         footer={editorFooter}
-        sizeContentToCurrentSnapPoint
         testID="sidebar-project-group-editor"
       >
         <View style={styles.editorFields}>
@@ -350,7 +340,6 @@ export function SidebarProjectGroupModals(): ReactElement {
         visible={assignmentProjectViewKey !== null}
         onClose={closeAssignment}
         header={assignmentHeader}
-        sizeContentToCurrentSnapPoint
         testID="sidebar-project-group-assignment"
       >
         <View style={styles.assignmentList}>
@@ -395,7 +384,7 @@ function ProjectGroupChoice({
     [selected],
   );
   return (
-    <Pressable
+    <PressHighlight
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       onPress={onPress}
@@ -410,7 +399,7 @@ function ProjectGroupChoice({
       />
       <Text style={styles.choiceText}>{name}</Text>
       {selected ? <Text style={styles.selectedMark}>✓</Text> : null}
-    </Pressable>
+    </PressHighlight>
   );
 }
 
@@ -419,13 +408,6 @@ export function useOpenProjectGroupAssignment(): (projectViewKey: string) => voi
 }
 
 const styles = StyleSheet.create((theme) => ({
-  headerButton: {
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.sm,
-  },
   pressed: { opacity: 0.65 },
   groupBlock: { marginBottom: theme.spacing[1] },
   groupBlockDragging: { opacity: 0.7 },

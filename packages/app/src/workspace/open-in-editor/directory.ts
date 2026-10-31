@@ -13,6 +13,7 @@ import {
 interface UseOpenDirectoryInEditorInput {
   serverId: string;
   workspaceDirectory: string;
+  projectId: string | null;
 }
 
 interface OpenDirectoryInEditorAction {
@@ -26,11 +27,12 @@ interface OpenDirectoryInEditorAction {
 export function useOpenDirectoryInEditor({
   serverId,
   workspaceDirectory,
+  projectId,
 }: UseOpenDirectoryInEditorInput): OpenDirectoryInEditorAction | null {
   const { t } = useTranslation();
   const toast = useToast();
   const isLocalExecution = useIsLocalDaemon(serverId);
-  const { preferredEditorId } = usePreferredEditor();
+  const { preferredEditorId } = usePreferredEditor({ serverId, projectId });
   const { targets, isAvailable } = useDesktopOpenTargets({ isLocalExecution });
   const editorTargets = useMemo(
     () => targets.filter((target) => target.kind === "editor"),

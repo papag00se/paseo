@@ -328,8 +328,8 @@ test("desktop CI selects every Electron overlay without selecting ordinary brows
   const selectsDesktop = (path) => filters.desktop.some((pattern) => matchesGlob(path, pattern));
   const electronModules = filesUnder("packages/app/src", (path) => /\.electron\.tsx?$/.test(path));
 
-  // CLAUDE.md and Metro permit feature-local overlays. Crossnote exposed the old
-  // directory restriction: its file-pane overlay was valid, but missed desktop CI.
+  // CLAUDE.md and Metro permit feature-local overlays, so desktop CI must not depend on one
+  // overlay directory: a valid feature-local overlay once missed desktop CI that way.
   assert.ok(electronModules.length > 0);
   for (const path of electronModules) {
     assert.ok(
@@ -339,10 +339,10 @@ test("desktop CI selects every Electron overlay without selecting ordinary brows
   }
 
   for (const [path, expected] of [
-    ["packages/app/src/file-pane/markdown-preview/index.electron.tsx", true],
+    ["packages/app/src/notification-open/source.electron.ts", true],
     ["packages/app/src/desktop/browser/pane/element-selector.electron.ts", true],
-    ["packages/desktop/e2e/markdown-preview.spec.ts", true],
-    ["packages/app/src/file-pane/markdown-preview/index.tsx", false],
+    ["packages/desktop/e2e/open-in-editor.spec.ts", true],
+    ["packages/app/src/file-panels/markdown-preview/index.tsx", false],
     ["packages/app/src/components/file-explorer-pane.tsx", false],
   ]) {
     assert.equal(selectsDesktop(path), expected, path);
@@ -367,7 +367,7 @@ test("desktop packaging builds main pushes and only the pull requests that touch
   const source = readFileSync(new URL(".github/workflows/desktop-packages.yml", repoRoot), "utf8");
   const trigger = source.split("jobs:", 1)[0];
   assert.match(trigger, /push:\s*\n\s+branches: \[main\]/);
-  assert.match(trigger, /pull_request:\s*\n\s+branches: \[main\]\s*\n\s+paths:/);
+  assert.match(trigger, /pull_request:\s*\n\s+paths:/);
   assert.match(trigger, /- "packages\/desktop\/\*\*"/);
   assert.doesNotMatch(source, /dorny\/paths-filter/);
   for (const action of ["actions/checkout", "actions/setup-node"]) {
