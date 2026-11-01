@@ -106,6 +106,8 @@ export interface AppSettings {
   chatDisplay: ChatDisplay;
   chatOutlineEnabled: boolean;
   vimKeybindings: boolean;
+  /** Fork: wrap long lines in file Source views. Null follows the file type (Markdown wraps). */
+  fileWrapLines: boolean | null;
   sendShortcut: SendShortcut;
   filePanelAssociations: Record<string, string>;
   /** Desktop-only preferences for implicit opens into the ordinary side pane. */
@@ -163,6 +165,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   chatDisplay: "collapseTurns",
   chatOutlineEnabled: true,
   vimKeybindings: false,
+  fileWrapLines: null,
   sendShortcut: "enter",
   filePanelAssociations: {},
   openInSidePane: DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES,
@@ -268,6 +271,7 @@ const StoredAppSettingsSchema = z
     compactToolCalls: z.boolean().optional().catch(undefined),
     chatOutlineEnabled: z.boolean().catch(true),
     vimKeybindings: z.boolean().catch(false),
+    fileWrapLines: z.boolean().nullable().catch(null),
     sendShortcut: z.enum(["enter", "mod-enter"]).catch("enter"),
     filePanelAssociations: z.record(z.string(), z.string()).catch({}),
     openInSidePane: z

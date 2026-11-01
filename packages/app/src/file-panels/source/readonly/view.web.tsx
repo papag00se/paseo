@@ -8,6 +8,7 @@ import type { EditorVisualTheme } from "../editor/extensions.web";
 import { editorTheme } from "../editor/extensions.web";
 import { FilePanelLoading } from "../../loading";
 import type { SourcePresentation } from "./presentation";
+import { shouldWrapFile } from "../wrap";
 
 interface FileSourceViewProps {
   content: string;
@@ -16,10 +17,15 @@ interface FileSourceViewProps {
   navigationRevision: number;
   presentation: Exclude<SourcePresentation, "unsupported">;
   theme: EditorVisualTheme;
+  /** The Wrap toggle's stored choice; null follows the file type. */
+  wrapLines?: boolean | null;
 }
 
 const languageCompartment = new Compartment();
 const themeCompartment = new Compartment();
+const wrappingCompartment = new Compartment();
+const wrappingFor = (filename: string, wrapLines: boolean | null) =>
+  shouldWrapFile(filename, wrapLines) ? EditorView.lineWrapping : [];
 
 /** A read-only source view for files Source does not edit. Shows Loading until the editor exists. */
 export function FileSourceView({
@@ -29,12 +35,13 @@ export function FileSourceView({
   navigationRevision,
   presentation,
   theme,
+  wrapLines = null,
 }: FileSourceViewProps) {
   const [find] = useState(() => new FileFindModel());
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [ready, setReady] = useState(false);
-  const initial = useRef({ content, filename, presentation, theme });
+  const initial = useRef({ content, filename, presentation, theme, wrapLines });
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -55,6 +62,7 @@ export function FileSourceView({
             languageFor({ filename: values.filename, presentation: values.presentation }),
           ),
           themeCompartment.of(editorTheme(values.theme)),
+          wrappingCompartment.of(wrappingFor(values.filename, values.wrapLines)),
         ],
       }),
     });
@@ -77,9 +85,10 @@ export function FileSourceView({
       effects: [
         languageCompartment.reconfigure(languageFor({ filename, presentation })),
         themeCompartment.reconfigure(editorTheme(theme)),
+        wrappingCompartment.reconfigure(wrappingFor(filename, wrapLines)),
       ],
     });
-  }, [filename, presentation, theme]);
+  }, [filename, presentation, theme, wrapLines]);
 
   useEffect(() => {
     const view = viewRef.current;

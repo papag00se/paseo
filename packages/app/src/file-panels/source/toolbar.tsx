@@ -2,7 +2,9 @@ import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { PaneContentToolbar } from "@/components/ui/pane-content-toolbar";
+import { PaneContentToolbar, ToolbarButton } from "@/components/ui/pane-content-toolbar";
+import { extraMutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import { WrapText } from "lucide-react-native";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { Theme } from "@/styles/theme";
 import { formatFileSize } from "@/utils/format-file-size";
@@ -10,6 +12,7 @@ import { FileConflictAlert, type FileConflictAlertState } from "./conflict-alert
 import type { FileEditorStatus } from "./editor/model";
 
 const ThemedSpinner = withUnistyles(LoadingSpinner);
+const ThemedWrapText = withUnistyles(WrapText);
 const spinnerMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export type TextFileView = "preview" | "source";
@@ -27,6 +30,7 @@ export function TextFileToolbar({
   cursor,
   vimMode,
   conflict,
+  wrap,
 }: {
   size: number;
   lineCount: number;
@@ -36,6 +40,8 @@ export function TextFileToolbar({
   cursor?: { line: number; column: number };
   vimMode?: string | null;
   conflict?: FileConflictAlertState | null;
+  /** Fork: the Source view's Wrap toggle; omitted where Source cannot wrap. */
+  wrap?: { enabled: boolean; onToggle(): void };
 }) {
   const { t } = useTranslation();
   const views = [
@@ -106,6 +112,20 @@ export function TextFileToolbar({
               </Text>
             ) : null}
           </View>
+          {wrap ? (
+            <ToolbarButton
+              label={t(
+                wrap.enabled
+                  ? "workspace.git.diff.scrollLongLines"
+                  : "workspace.git.diff.wrapLongLines",
+              )}
+              selected={wrap.enabled}
+              testID="file-toggle-wrap-lines"
+              onPress={wrap.onToggle}
+            >
+              <ThemedWrapText size={14} uniProps={extraMutedIconColorMapping} />
+            </ToolbarButton>
+          ) : null}
           {view && onViewChange ? (
             <SegmentedControl
               size="xs"

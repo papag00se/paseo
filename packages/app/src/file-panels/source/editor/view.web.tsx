@@ -7,6 +7,7 @@ import { getCM, vim } from "@replit/codemirror-vim";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import type { FileEditorModel } from "./model";
 import { editorBaseExtensions, editorTheme, type EditorVisualTheme } from "./extensions.web";
+import { shouldWrapFile } from "../wrap";
 
 interface FileEditorViewProps {
   model: FileEditorModel;
@@ -14,6 +15,8 @@ interface FileEditorViewProps {
   location: WorkspaceFileLocation;
   navigationRevision: number;
   vimEnabled: boolean;
+  /** The Wrap toggle's stored choice; null follows the file type. */
+  wrapLines: boolean | null;
   theme: EditorVisualTheme;
   onCursorChange(position: { line: number; column: number }): void;
   onVimModeChange(mode: string | null): void;
@@ -26,12 +29,8 @@ const wrappingCompartment = new Compartment();
 const themeCompartment = new Compartment();
 const vimCompartment = new Compartment();
 
-/** Markdown is prose, so its paragraphs wrap; code keeps its lines. */
-const WRAPPED_EXTENSIONS = new Set(["md", "markdown"]);
-
-function wrappingForFile(filename: string) {
-  const extension = filename.split(".").pop()?.toLowerCase() ?? "";
-  return WRAPPED_EXTENSIONS.has(extension) ? EditorView.lineWrapping : [];
+function wrappingForFile(filename: string, wrapLines: boolean | null) {
+  return shouldWrapFile(filename, wrapLines) ? EditorView.lineWrapping : [];
 }
 
 export function FileEditorView({
@@ -40,6 +39,7 @@ export function FileEditorView({
   location,
   navigationRevision,
   vimEnabled,
+  wrapLines,
   theme,
   onCursorChange,
   onVimModeChange,
@@ -54,6 +54,7 @@ export function FileEditorView({
     model,
     theme,
     vimEnabled,
+    wrapLines,
     content: snapshot.content,
     onReady,
   });
@@ -72,7 +73,7 @@ export function FileEditorView({
           find.extension,
           ...editorBaseExtensions(() => void values.model.save()),
           languageCompartment.of(getLanguageForFile(values.filename)?.extension ?? []),
-          wrappingCompartment.of(wrappingForFile(values.filename)),
+          wrappingCompartment.of(wrappingForFile(values.filename, values.wrapLines)),
           themeCompartment.of(editorTheme(values.theme)),
           EditorView.updateListener.of((update) => {
             if (
@@ -130,10 +131,10 @@ export function FileEditorView({
     viewRef.current?.dispatch({
       effects: [
         languageCompartment.reconfigure(getLanguageForFile(filename)?.extension ?? []),
-        wrappingCompartment.reconfigure(wrappingForFile(filename)),
+        wrappingCompartment.reconfigure(wrappingForFile(filename, wrapLines)),
       ],
     });
-  }, [filename]);
+  }, [filename, wrapLines]);
 
   useEffect(() => {
     viewRef.current?.dispatch({ effects: themeCompartment.reconfigure(editorTheme(theme)) });
