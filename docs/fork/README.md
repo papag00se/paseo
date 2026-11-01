@@ -18,6 +18,8 @@ List the original additions with `git log --oneline 818658520..67e0f55dd`. Compa
 
 The 0.11.2 merge keeps Momentum inside upstream's shared hover-card component and retains the wider card. Project groups coexist with upstream's sidebar separators. Startup failure stops Momentum and clears upstream's local credential. The 0.14.0 merge keeps the fork's chat-link **Open in Editor** actions in upstream's new link renderer, uses each project's chosen editor, and extends staging actions to the new **All changes** diff mode.
 
+[Fork inventory and upstream requests](upstream-requests.md) lists every custom change, whether it could be a plugin, and drafts for upstream.
+
 ## Agent lifecycle fixes (incident 2026-11-01)
 
 About 19,000 stored agents (mostly subagents) froze the daemon: every `paseo agent archive <id>` paged the whole directory, about 100 requests that each re-sorted every record, and parallel archive scripts pinned the event loop near one second per tick. Stop also failed on Pi agents whose interrupt was never acknowledged ("active run cancellation was not acknowledged").
