@@ -36,6 +36,22 @@ Pi reasoning choices follow its refreshable per-model catalog, not model-name li
 
 Pi can summarize a large saved conversation before acknowledging the next prompt. The fork excludes prompt acceptance from the 60-second control-plane timeout, matching the existing explicit-compaction contract. Otherwise Paseo reports failure while Pi continues the original prompt, inviting duplicate work. Regression coverage waits five simulated minutes and checks that process exit and session close still reject pending prompts. State-query timeouts remain bounded.
 
+## Per-agent resource scopes
+
+Every agent provider command in `~/.paseo/config.json` starts with `scripts/fork/agent-scope.sh`. Claude takes a single executable path, so it uses `agent-scope-claude.sh`. Each agent and everything it starts gets its own systemd user scope under `app-paseoagents.slice`, instead of sharing the desktop app's scope.
+
+Each agent scope has these defaults, overridable through `PASEO_AGENT_*` variables:
+
+- **Memory:** throttled above 8G, killed inside the scope above 12G, with at most 4G of swap. `OOMPolicy=continue` keeps the agent running when only a child process is killed.
+- **CPUs:** a rotating window of 4 threads. Node's `os.availableParallelism()` follows it, so current Jest and Vitest start at most 3–4 workers instead of 31. Tools that count `os.cpus()` (older Jest) are not limited by this.
+- **Temp files:** `TMPDIR` is a private directory under `/var/tmp/paseo-agents/`, on disk rather than the RAM-backed `/tmp`. systemd-tmpfiles removes entries unused for 30 days.
+
+Detached jobs keep running after their agent exits, because cgroup membership survives `setsid`/`nohup`. They stay visible with `systemctl --user list-units 'paseo-agent-*'`.
+
+Incident 2026-10-31: 20+ agents each ran full test suites, scratch servers and local model servers in the app's one scope. It peaked at 40G plus 12G swap, and the desktop app and daemon died.
+
+The tests run against the real systemd user manager: `node --test scripts/fork/agent-scope.test.mjs`.
+
 ## Build and install the desktop app
 
 ```bash
