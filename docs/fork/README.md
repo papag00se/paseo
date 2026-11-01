@@ -18,6 +18,15 @@ List the original additions with `git log --oneline 818658520..67e0f55dd`. Compa
 
 The 0.11.2 merge keeps Momentum inside upstream's shared hover-card component and retains the wider card. Project groups coexist with upstream's sidebar separators. Startup failure stops Momentum and clears upstream's local credential. The 0.14.0 merge keeps the fork's chat-link **Open in Editor** actions in upstream's new link renderer, uses each project's chosen editor, and extends staging actions to the new **All changes** diff mode.
 
+## Agent lifecycle fixes (incident 2026-11-01)
+
+About 19,000 stored agents (mostly subagents) froze the daemon: every `paseo agent archive <id>` paged the whole directory, about 100 requests that each re-sorted every record, and parallel archive scripts pinned the event loop near one second per tick. Stop also failed on Pi agents whose interrupt was never acknowledged ("active run cancellation was not acknowledged").
+
+- `paseo agent archive/reload/detach/stop <id>` resolve the agent with one `fetch_agent` request; the daemon matches ID, unique prefix or exact title.
+- Stop closes the provider runtime when an interrupt is not acknowledged. The agent shows as closed and resumes from its saved session on the next prompt, like an idle-collected runtime. Replace, reload and rewind still refuse.
+- SDK agent handles have `delete()`; plugin server entries get `server.paseo` for timer-driven work.
+- The [Agent retention plugin](https://github.com/papag00se/paseo-agent-retention) (`~/Work/paseo-agent-retention`) deletes idle subagents (default 1 day, logs discarded) and parent agents (default 60 days, Pi logs copied to `~/paseo-agent-logs` first), and purges those backups after 180 days.
+
 ## Actions policy
 
 This fork keeps tests local-only, including packaged desktop smoke tests previously invoked by release hooks. Build, package, lint, type and deployment guards remain. See [testing](../testing.md#where-tests-run) for the contributor policy and the disabled mixed-workflow delivery caveat.
@@ -74,6 +83,7 @@ The bundled updater still names `getpaseo/paseo`. Installing an upstream update 
 | Juke              | `papag00se/paseo-juke-plugin`       |                                                               |
 | Role Orchestrator | `papag00se/paseo-role-orchestrator` |                                                               |
 | Overcommitted     | `papag00se/paseo-overcommitted`     |                                                               |
+| Agent retention   | `papag00se/paseo-agent-retention`   | Needs this fork (`server.paseo`, agent `delete()`).           |
 | Markdown Preview  | `papag00se/paseo-markdown-preview`  |                                                               |
 | Project Groups    | `papag00se/paseo-project-groups`    | Retired: built into this fork.                                |
 
