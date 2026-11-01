@@ -1,10 +1,6 @@
 import type { Logger } from "pino";
 
-import {
-  AgentRunCancellationError,
-  type AgentRunCancellationResult,
-  type ManagedAgent,
-} from "./agent-manager.js";
+import type { AgentRunCancellationResult, ManagedAgent } from "./agent-manager.js";
 import type { StoredAgentRecord } from "./agent-storage.js";
 import type { AgentProviderNotice } from "./agent-sdk-types.js";
 
@@ -99,11 +95,15 @@ export async function cancelAgentRunCommand(
 ): Promise<CancelAgentRunResult> {
   const result = await requestAgentRunCancellation(dependencies, agentId);
   if (result.cancellation.status === "refused") {
+    // Stop must stop. A provider that never acknowledges the interrupt (a wedged or
+    // starved process) is shut down instead; the closed agent resumes from its saved
+    // session on the next prompt, exactly like an idle-collected runtime.
     dependencies.logger.warn(
       { agentId },
-      "cancelAgentRunCommand: reported running but no active run was cancelled",
+      "cancelAgentRunCommand: interrupt not acknowledged; closing the agent runtime",
     );
-    throw new AgentRunCancellationError(agentId, "stop");
+    await dependencies.agentManager.closeAgent(agentId);
+    return { agent: result.agent, cancelled: true };
   }
 
   return { agent: result.agent, cancelled: result.cancelled };

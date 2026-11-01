@@ -104,6 +104,7 @@ See [background workspaces](./workspaces.md) for caller inheritance and inclusiv
 | `commands(options?)`           | `PaseoAgentCommandsResult`        | Asks the live session for its slash commands and skills, including built-in ones. Options: `requestId`. |
 | `subscribe(handler)`           | Unsubscribe function              | Filters agent-directory updates to this ID and refreshes the handle properties.                         |
 | `archive()`                    | `{ archivedAt }`                  | Soft-deletes the agent and closes its runtime.                                                          |
+| `delete()`                     | `Promise<void>`                   | Permanently deletes the agent record after interrupting and closing its runtime.                        |
 | `detach()`                     | `Promise<void>`                   | Removes the parent relationship without stopping the agent.                                             |
 
 `workspaceId` through `archivedAt` mirror the last snapshot the handle observed. A handle from `ref()` reads `null` for all of them until `refresh()`, `run()`, `waitForFinish()`, a timeline refetch, or `subscribe()` delivers a snapshot. Optional values in an observed snapshot also read as `null`. Call `current()` when you need the whole snapshot or need to distinguish those states.

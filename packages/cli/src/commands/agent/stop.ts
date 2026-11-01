@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import { connectToDaemon } from "../../utils/client.js";
 import { isSameOrDescendantPath } from "../../utils/paths.js";
+import { fetchAgentOrNotFound, fetchAllAgents } from "../../utils/agent-directory.js";
+import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import type {
   CommandOptions,
   SingleResult,
@@ -54,31 +56,17 @@ export async function runStopCommand(
   const client = await connectToDaemon({ target: options.daemonTarget });
 
   try {
-    const fetchPayload = await client.fetchAgents({ filter: { includeArchived: true } });
-    let agents = fetchPayload.entries.map((entry) => entry.agent);
     const stoppedIds: string[] = [];
+    let agents: AgentSnapshotPayload[];
 
-    if (options.all) {
-      // Stop all agents (not archived)
-      agents = agents.filter((a) => !a.archivedAt);
-    } else if (options.cwd) {
-      // Stop agents in directory
-      agents = agents.filter((a) => {
-        if (a.archivedAt) return false;
-        return isSameOrDescendantPath(options.cwd!, a.cwd);
-      });
-    } else if (id) {
-      // Stop specific agent
-      const fetchResult = await client.fetchAgent({ agentId: id });
-      if (!fetchResult) {
-        const error: CommandError = {
-          code: "AGENT_NOT_FOUND",
-          message: `No agent found matching: ${id}`,
-          details: "Use `paseo ls` to list available agents",
-        };
-        throw error;
+    if (id && !options.all && !options.cwd) {
+      agents = [await fetchAgentOrNotFound(client, id)];
+    } else {
+      // Archived agents have no run to stop, so the directory default (unarchived) is enough.
+      agents = await fetchAllAgents(client);
+      if (options.cwd) {
+        agents = agents.filter((a) => isSameOrDescendantPath(options.cwd!, a.cwd));
       }
-      agents = [fetchResult.agent];
     }
 
     // Interrupt each running agent. Idle agents are a no-op.

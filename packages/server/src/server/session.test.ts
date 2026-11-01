@@ -127,19 +127,21 @@ test("interruptAgentIfRunning rejects when graceful cancellation is refused", as
   );
 });
 
-test("cancel_agent_request reports refusal only through its response", async () => {
+test("cancel_agent_request closes an agent whose cancellation is refused", async () => {
   const agentId = "11111111-1111-4111-8111-111111111111";
   const messages: SessionOutboundMessage[] = [];
   const getAgent = vi
     .fn()
     .mockReturnValueOnce({ id: agentId, provider: "codex", lifecycle: "running" })
     .mockReturnValue(null);
+  const closeAgent = vi.fn(async () => undefined);
   const session = createSessionForTest({
     messages,
     agentManager: {
       getAgent,
       hasInFlightRun: vi.fn(() => true),
       cancelAgentRun: vi.fn(async () => ({ status: "refused" as const })),
+      closeAgent,
     },
   });
 
@@ -149,21 +151,16 @@ test("cancel_agent_request reports refusal only through its response", async () 
     requestId: "cancel-refused",
   });
 
+  expect(closeAgent).toHaveBeenCalledWith(agentId);
   expect(messages).toEqual([
     {
       type: "cancel_agent_response",
-      payload: {
-        requestId: "cancel-refused",
-        agentId,
-        agent: null,
-        error:
-          "Cannot stop agent 11111111-1111-4111-8111-111111111111 because its active run cancellation was not acknowledged",
-      },
+      payload: { requestId: "cancel-refused", agentId, agent: null, error: null },
     },
   ]);
 });
 
-test("legacy cancel_agent_request reports refusal through the activity log", async () => {
+test("legacy cancel_agent_request reports a failed stop through the activity log", async () => {
   const agentId = "11111111-1111-4111-8111-111111111111";
   const messages: SessionOutboundMessage[] = [];
   const session = createSessionForTest({
@@ -172,6 +169,9 @@ test("legacy cancel_agent_request reports refusal through the activity log", asy
       getAgent: vi.fn(() => ({ id: agentId, provider: "codex", lifecycle: "running" })),
       hasInFlightRun: vi.fn(() => true),
       cancelAgentRun: vi.fn(async () => ({ status: "refused" as const })),
+      closeAgent: vi.fn(async () => {
+        throw new Error("provider process would not exit");
+      }),
     },
   });
 
@@ -184,8 +184,7 @@ test("legacy cancel_agent_request reports refusal through the activity log", asy
         id: expect.any(String),
         timestamp: expect.any(Date),
         type: "error",
-        content:
-          "Failed to cancel running agent on request: Cannot stop agent 11111111-1111-4111-8111-111111111111 because its active run cancellation was not acknowledged",
+        content: "Failed to cancel running agent on request: provider process would not exit",
       },
     },
   ]);
