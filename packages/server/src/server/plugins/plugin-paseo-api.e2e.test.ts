@@ -78,7 +78,7 @@ test.each(["React Native", "native"])(
   },
 );
 
-test("plugin handlers create workspaces and agents through their Paseo API", async () => {
+test("plugin handlers and the plugin entry create and delete agents through their Paseo API", async () => {
   const pluginDirectory = await mkdtemp(path.join(tmpdir(), "paseo-api-plugin-"));
   const workspaceDirectory = await mkdtemp(path.join(tmpdir(), "paseo-api-workspace-"));
   roots.push(pluginDirectory, workspaceDirectory);
@@ -107,6 +107,12 @@ const list = defineRpc({
   output: z.object({ agentIds: z.array(z.string()) }),
 });
 
+const remove = defineRpc({
+  name: "remove",
+  input: z.object({ agentId: z.string() }),
+  output: z.object({}),
+});
+
 const append = defineRpc({
   name: "append",
   input: z.object({ agentId: z.string(), status: z.string() }),
@@ -125,9 +131,15 @@ export default function contribute(server: PluginServerContext) {
     });
     return { workspaceId: workspace.id, agentId: agent.id };
   });
-  server.handle(list, async (_input, { paseo }) => {
-    const result = await paseo.agents.list({ page: { limit: 100 } });
+  // Timer-driven work has no handler context; the entry's own connection serves it.
+  const entryPaseo = server.paseo;
+  server.handle(list, async () => {
+    const result = await entryPaseo.agents.list({ page: { limit: 100 } });
     return { agentIds: result.entries.map((entry) => entry.agent.id) };
+  });
+  server.handle(remove, async ({ agentId }) => {
+    await entryPaseo.agents.ref(agentId).delete();
+    return {};
   });
   server.handle(append, ({ agentId, status }, { paseo }) =>
     paseo.agents.ref(agentId).timeline.append({
@@ -178,6 +190,12 @@ export default function contribute(server: PluginServerContext) {
       client.invokePluginRpc("paseo-api", "append", { agentId, status: "running" }),
     ).resolves.toEqual({ seq: expect.any(Number), epoch: expect.any(String) });
     await client.invokePluginRpc("paseo-api", "append", { agentId, status: "complete" });
+    const doomed = await client.invokePluginRpc("paseo-api", "create", {
+      path: workspaceDirectory,
+    });
+    const doomedId = Reflect.get(doomed as object, "agentId");
+    await client.invokePluginRpc("paseo-api", "remove", { agentId: doomedId });
+    await expect(client.fetchAgent({ agentId: doomedId })).resolves.toBeNull();
     const timeline = await client.fetchAgentTimeline(agentId, { projection: "projected" });
     expect(timeline.entries.filter((entry) => entry.item.type === "plugin")).toEqual([
       expect.objectContaining({

@@ -28,6 +28,11 @@ export interface PluginSettings<Schema extends ZodType> {
 }
 
 export interface PluginServerContext extends PluginLifecycleRegistration {
+  /**
+   * The plugin subprocess's own SDK connection to this daemon, the same one handlers
+   * and hooks receive. Use it for timer-driven work that runs without any caller.
+   */
+  readonly paseo: PaseoApi;
   registerSettings<Schema extends ZodType>(
     definition: import("../settings.js").SettingsDefinition<Schema>,
   ): PluginSettings<Schema>;
