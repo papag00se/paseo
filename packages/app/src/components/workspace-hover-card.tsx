@@ -167,15 +167,6 @@ function WorkspaceMomentum({
     void Promise.all(workspaceAgents.map((agent) => client?.refreshAgent(agent.id)));
     void refetchHistory();
   }, [client, workspaceAgents, refetchHistory]);
-  const earlier = useMemo(
-    // Until agents replicate, every entry would look deleted.
-    () =>
-      (agents ? (history.data ?? []).filter((entry) => !agents.has(entry.agentId)) : []).slice(
-        0,
-        EARLIER_SESSION_LIMIT,
-      ),
-    [history.data, agents],
-  );
   const summaries = useMemo(
     () =>
       workspaceAgents
@@ -187,6 +178,14 @@ function WorkspaceMomentum({
         ),
     [workspaceAgents],
   );
+  const earlier = useMemo(() => {
+    // Any cached agent without a live summary shows its last cached one: deleted agents, archived
+    // ones, and agents whose records haven't replicated yet.
+    const live = new Set(summaries.map((agent) => agent.id));
+    return (history.data ?? [])
+      .filter((entry) => !live.has(entry.agentId))
+      .slice(0, EARLIER_SESSION_LIMIT);
+  }, [history.data, summaries]);
 
   // Always expose Momentum. Agent records are replicated lazily, so hiding this
   // section until the replica arrives made the feature appear nonexistent.
@@ -220,7 +219,7 @@ function WorkspaceMomentum({
       ))}
       {earlier.length > 0 ? (
         <View style={styles.momentumBlock} testID="workspace-momentum-earlier">
-          <Text style={styles.momentumText}>Earlier sessions (agent deleted)</Text>
+          <Text style={styles.momentumText}>Earlier sessions</Text>
         </View>
       ) : null}
       {earlier.map((entry) => (
