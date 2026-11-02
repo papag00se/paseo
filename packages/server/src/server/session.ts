@@ -138,6 +138,7 @@ import {
 } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
+import { readMomentumHistory } from "./agent/momentum-cache.js";
 import {
   ImportSessionsRequestError,
   importProviderSession,
@@ -2778,6 +2779,8 @@ export class Session {
         return this.handleAgentTimelineAppendRequest(msg);
       case "agent.timeline.search.request":
         return this.handleAgentTimelineSearchRequest(msg, source);
+      case "momentum.history.request":
+        return this.handleMomentumHistoryRequest(msg, source);
       case "agent.timeline.list_prompts.request":
         return this.handleAgentTimelineListPromptsRequest(msg, source);
       case "agent.provider_subagents.list.request":
@@ -7920,6 +7923,23 @@ export class Session {
       type: "agent.timeline.append.response",
       payload: { requestId: msg.requestId, seq, epoch },
     });
+  }
+
+  private async handleMomentumHistoryRequest(
+    msg: Extract<SessionInboundMessage, { type: "momentum.history.request" }>,
+    source?: object,
+  ): Promise<void> {
+    let entries: Awaited<ReturnType<typeof readMomentumHistory>> = [];
+    let error: string | null = null;
+    try {
+      entries = await readMomentumHistory(this.paseoHome, msg.workspaceId);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : String(cause);
+    }
+    this.emitForSource(
+      { type: "momentum.history.response", payload: { requestId: msg.requestId, entries, error } },
+      source,
+    );
   }
 
   private async handleAgentTimelineSearchRequest(

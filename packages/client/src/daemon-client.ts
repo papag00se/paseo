@@ -19,6 +19,7 @@ import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@getpaseo/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@getpaseo/protocol/messages";
+import type { AgentMomentumHistoryEntry } from "@getpaseo/protocol/messages";
 import type { LocalSpeechModel } from "@getpaseo/protocol/speech/rpc-schemas";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@getpaseo/protocol/agent-attention-notification";
@@ -3602,6 +3603,18 @@ export class DaemonClient {
       responseType: "agent.timeline.append.response",
     });
     return { seq: payload.seq, epoch: payload.epoch };
+  }
+
+  /** Persisted Momentum summaries for a workspace, including agents that were since deleted. */
+  async fetchMomentumHistory(workspaceId: string): Promise<AgentMomentumHistoryEntry[]> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "momentum.history.request", requestId, workspaceId },
+      responseType: "momentum.history.response",
+    });
+    if (payload.error) throw new Error(payload.error);
+    return payload.entries;
   }
 
   async searchAgentTimeline({

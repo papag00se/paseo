@@ -859,6 +859,14 @@ export const AgentMomentumSnapshotSchema = z.object({
 });
 export type AgentMomentumSnapshot = z.infer<typeof AgentMomentumSnapshotSchema>;
 
+/** A persisted Momentum summary; it outlives the agent so deleted sessions keep their last summary. */
+export const AgentMomentumHistoryEntrySchema = AgentMomentumSnapshotSchema.extend({
+  agentId: z.string(),
+  workspaceId: z.string(),
+  title: z.string().nullable(),
+});
+export type AgentMomentumHistoryEntry = z.infer<typeof AgentMomentumHistoryEntrySchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -1941,6 +1949,12 @@ export const AgentTimelineSearchRequestMessageSchema = z.object({
   requestId: z.string(),
   query: z.string(),
   cursor: z.number().int().nonnegative().optional(),
+});
+
+export const MomentumHistoryRequestMessageSchema = z.object({
+  type: z.literal("momentum.history.request"),
+  requestId: z.string(),
+  workspaceId: z.string(),
 });
 
 export const AgentTimelineListPromptsRequestMessageSchema = z.object({
@@ -3375,6 +3389,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DaemonUpdateRequestMessageSchema,
   FetchAgentTimelineRequestMessageSchema,
   AgentTimelineSearchRequestMessageSchema,
+  MomentumHistoryRequestMessageSchema,
   AgentTimelineListPromptsRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
@@ -4805,6 +4820,15 @@ export const AgentTimelineSearchResponseMessageSchema = z.object({
       }),
     ),
     nextCursor: z.number().int().nonnegative().nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const MomentumHistoryResponseMessageSchema = z.object({
+  type: z.literal("momentum.history.response"),
+  payload: z.object({
+    requestId: z.string(),
+    entries: z.array(AgentMomentumHistoryEntrySchema),
     error: z.string().nullable(),
   }),
 });
@@ -7083,6 +7107,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentTimelineResponseMessageSchema,
   AgentTimelineReplacementMessageSchema,
   AgentTimelineSearchResponseMessageSchema,
+  MomentumHistoryResponseMessageSchema,
   AgentTimelineListPromptsResponseMessageSchema,
   ProviderSubagentListResponseMessageSchema,
   ProviderSubagentTimelineResponseMessageSchema,
