@@ -1262,6 +1262,50 @@ test("archive and delete replies retain their historical names and reach only th
   }
 });
 
+test("deleting an agent removes it from every session's agent subscriptions, not only the deleter's", async () => {
+  // A plugin deleting an agent must not leave the app holding a stale agent ("Agent not found").
+  const daemon = await createTestPaseoDaemon({ mcpEnabled: false });
+  const admin = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws`, appVersion: "0.8.0" });
+  const peers: SubscriptionPeer[] = [];
+  try {
+    await admin.connect();
+    const agent = await admin.createAgent({ provider: "codex", cwd: daemon.staticDir });
+    const deleter = await SubscriptionPeer.connect(daemon.port, "external-delete-deleter");
+    const observer = await SubscriptionPeer.connect(daemon.port, "external-delete-observer");
+    peers.push(deleter, observer);
+    await observer.request({ type: "fetch_agents_request", requestId: "all", subscribe: {} });
+    const [snapshot] = observer.frames.flatMap((frame) =>
+      frame.type === "session" && frame.message.type === "fetch_agents_response"
+        ? [frame.message.payload]
+        : [],
+    );
+    await deleter.request({ type: "delete_agent_request", requestId: "delete", agentId: agent.id });
+    await expect
+      .poll(
+        () =>
+          observer.frames.flatMap((frame) =>
+            frame.type === "session" && frame.message.type === "agent_update"
+              ? [frame.message.payload]
+              : [],
+          ),
+        { timeout: 5000 },
+      )
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            subscriptionId: snapshot.subscriptionId,
+            kind: "remove",
+            agentId: agent.id,
+          }),
+        ]),
+      );
+  } finally {
+    for (const peer of peers) peer.close();
+    await admin.close();
+    await daemon.close();
+  }
+});
+
 test("Hub bootstrap sends its server ID before the producer's synchronous snapshot", async () => {
   const daemon = await createTestPaseoDaemon({ mcpEnabled: false });
   const admin = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });

@@ -1586,6 +1586,13 @@ export class VoiceAssistantWebSocketServer {
       getTransportBufferedAmount: options.getTransportBufferedAmount,
       onLifecycleIntent: options.onLifecycleIntent,
       logger: options.connectionLogger.child({ module: "session" }),
+      onAgentDeleted: async (agentId, workspaceId) => {
+        await Promise.all(
+          this.listSessions().map((activeSession) =>
+            activeSession.applyAgentDeletion(agentId, workspaceId),
+          ),
+        );
+      },
       onWorkspaceRecovered: async (workspace) => {
         await Promise.all(
           this.listSessions().map((activeSession) =>
