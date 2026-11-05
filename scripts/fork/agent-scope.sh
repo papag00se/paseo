@@ -4,10 +4,11 @@
 # Why: every agent used to live in the desktop app's single scope, so one agent's runaway test
 # run (Jest/Vitest default to one worker per CPU thread: 31 here) or leftover server pushed the
 # whole app into memory pressure and took every agent down with it (2026-10-31). Per agent:
-#   * memory: a hard cap of PASEO_AGENT_MEMORY_MAX. Above it the kernel kills the largest process
-#     inside the scope (the runaway job, not the ~300M agent); OOMPolicy=continue keeps the agent alive.
-#     No MemoryHigh throttle by default: throttling is memory pressure by design, and pressure is what
-#     systemd-oomd kills whole scopes for. Four agents died that way at exactly 8G/4G swap (2026-11-02..04).
+#   * memory: uncapped by default (owner decision 2026-11-04: one process may use as much memory as
+#     the machine has). PASEO_AGENT_MEMORY_HIGH/MAX/SWAP_MAX still set opt-in limits; above a MAX the
+#     kernel kills the largest process inside the scope and OOMPolicy=continue keeps the agent alive.
+#     Never default to a MemoryHigh throttle: throttling is memory pressure by design, and four agents
+#     were SIGKILLed for it by systemd-oomd at exactly 8G/4G swap (2026-11-02..04). oomd is now masked.
 #   * oomd: agents live in their own top-level user slice, paseoagents.slice, not under app.slice.
 #     Omarchy makes app.slice the only systemd-oomd kill domain, and oomd kills an entire cgroup, so an
 #     agent under app.slice could be SIGKILLed with all its jobs for pressure it did not cause.
@@ -20,8 +21,8 @@ set -euo pipefail
 
 : "${PASEO_AGENT_CPUS:=4}"
 : "${PASEO_AGENT_MEMORY_HIGH:=infinity}"
-: "${PASEO_AGENT_MEMORY_MAX:=12G}"
-: "${PASEO_AGENT_SWAP_MAX:=4G}"
+: "${PASEO_AGENT_MEMORY_MAX:=infinity}"
+: "${PASEO_AGENT_SWAP_MAX:=infinity}"
 : "${PASEO_AGENT_TMP_ROOT:=/var/tmp/paseo-agents}"
 
 if [ "$#" -eq 0 ]; then

@@ -54,7 +54,8 @@ Every agent provider command in `~/.paseo/config.json` starts with `scripts/fork
 
 Each agent scope has these defaults, overridable through `PASEO_AGENT_*` variables:
 
-- **Memory:** a hard cap of 12G with at most 4G of swap. Above it the kernel kills the largest process inside the scope (the runaway job, not the ~300M agent), and `OOMPolicy=continue` keeps the agent running. There is no `MemoryHigh` throttle by default: throttling is memory pressure by design, and pressure is exactly what systemd-oomd kills whole scopes for.
+- **Memory:** uncapped by default. Owner decision (2026-11-04): a single process may use as much memory as the machine has, and nothing kills it for memory pressure. `PASEO_AGENT_MEMORY_MAX`/`PASEO_AGENT_SWAP_MAX` set opt-in caps; above a cap the kernel kills the largest process inside the scope (the job, not the ~300M agent), and `OOMPolicy=continue` keeps the agent running. Never default to a `MemoryHigh` throttle: throttling is memory pressure by design.
+- **systemd-oomd:** masked system-wide (`systemd-oomd.service` and `.socket`), and `~/.config/systemd/user/app.slice.d/10-oomd.conf` replaces Omarchy's same-named drop-in that made `app.slice` a kill target. Only the kernel's own OOM killer remains, which acts only once RAM and all swap are actually exhausted.
 - **CPUs:** a rotating window of 4 threads. Node's `os.availableParallelism()` follows it, so current Jest and Vitest start at most 3–4 workers instead of 31. Tools that count `os.cpus()` (older Jest) are not limited by this.
 - **Temp files:** `TMPDIR` is a private directory under `/var/tmp/paseo-agents/`, on disk rather than the RAM-backed `/tmp`. systemd-tmpfiles removes entries unused for 30 days.
 
