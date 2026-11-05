@@ -17,7 +17,8 @@ test("an agent gets its own scope with memory caps, a CPU window Node sizes work
   );
   assert.equal(out.status, 0, out.stderr);
   const [cgroup, high, max, swap, tmp, parallelism] = out.stdout.trim().split("\n");
-  assert.match(cgroup, /\/app\.slice\/app-paseoagents\.slice\/paseo-agent-\d+-\d+\.scope$/);
+  // Outside app.slice, the only cgroup systemd-oomd may kill on this desktop (Omarchy app.slice.d/10-oomd.conf).
+  assert.match(cgroup, /\/user@\d+\.service\/paseoagents\.slice\/paseo-agent-\d+-\d+\.scope$/);
   assert.deepEqual([high, max, swap], [String(300 * 2 ** 20), String(400 * 2 ** 20), "0"]);
   assert.match(tmp, /^\/var\/tmp\/paseo-agents\/paseo-agent-/);
   assert.ok(existsSync(tmp));
