@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { ToolCallDetail } from "../../agent-sdk-types.js";
-import { omitNullArgs, withoutInlineImageData } from "../tool-call-payloads.js";
+import { omitNullArgs } from "../tool-call-args.js";
 
 interface BashToolInput {
   command: string;
@@ -417,7 +417,7 @@ export function mapToolDetail(
       return {
         type: "unknown",
         input: toolCall.args,
-        output: withoutInlineImageData(parsedResult),
+        output: parsedResult,
       };
   }
 }
