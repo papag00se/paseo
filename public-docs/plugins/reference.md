@@ -628,6 +628,8 @@ export default function contribute(client: PluginClientContext) {
 }
 ```
 
+`server.paseo` is the subprocess's connected SDK, the same one handlers and hooks receive as `context.paseo`. Use it for timer-driven work that has no caller, such as periodic cleanup.
+
 Cleanup can be async. Release timers, watchers, sockets, and other resources created by the plugin. Paseo also removes registrations, unmounts surfaces, rejects pending RPCs, closes the plugin's daemon session, and stops its subprocess on reload, disable, removal, disconnect, or daemon shutdown.
 
 ## Lifecycle hooks

@@ -138,6 +138,7 @@ import {
 } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
+import { readMomentumHistory } from "./agent/momentum-cache.js";
 import {
   ImportSessionsRequestError,
   importProviderSession,
@@ -457,6 +458,8 @@ export interface SessionOptions {
   getConnectedHostBufferedAmount?: () => number | null;
   onLifecycleIntent?: (intent: SessionLifecycleIntent) => void;
   onWorkspaceRecovered?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  /** Tells every connected session that an agent was deleted, whichever client deleted it. */
+  onAgentDeleted?: (agentId: string, workspaceId: string | null) => Promise<void>;
   publishScriptStatusUpdate?: (message: ScriptStatusUpdateMessage) => void;
   logger: pino.Logger;
   downloadTokenStore: DownloadTokenStore;
@@ -737,6 +740,9 @@ export class Session {
   private readonly onWorkspaceRecovered:
     | ((workspace: PersistedWorkspaceRecord) => Promise<void>)
     | null;
+  private readonly onAgentDeleted:
+    | ((agentId: string, workspaceId: string | null) => Promise<void>)
+    | null;
   private readonly sessionLogger: pino.Logger;
   private readonly paseoHome: string;
   private readonly projectIcons: ProjectIconReader;
@@ -840,6 +846,7 @@ export class Session {
       getTransportBufferedAmount,
       onLifecycleIntent,
       onWorkspaceRecovered,
+      onAgentDeleted,
       publishScriptStatusUpdate,
       logger,
       downloadTokenStore,
@@ -906,6 +913,7 @@ export class Session {
     this.getTransportBufferedAmount = getTransportBufferedAmount ?? (() => 0);
     this.onLifecycleIntent = onLifecycleIntent ?? null;
     this.onWorkspaceRecovered = onWorkspaceRecovered ?? null;
+    this.onAgentDeleted = onAgentDeleted ?? null;
     this.pushNotifications = pushNotifications;
     this.paseoHome = paseoHome;
     this.messageReceipts = options.messageReceipts;
@@ -2778,6 +2786,8 @@ export class Session {
         return this.handleAgentTimelineAppendRequest(msg);
       case "agent.timeline.search.request":
         return this.handleAgentTimelineSearchRequest(msg, source);
+      case "momentum.history.request":
+        return this.handleMomentumHistoryRequest(msg, source);
       case "agent.timeline.list_prompts.request":
         return this.handleAgentTimelineListPromptsRequest(msg, source);
       case "agent.provider_subagents.list.request":
@@ -3347,10 +3357,27 @@ export class Session {
       },
     });
 
-    await this.agentUpdates.removeAgent(agentId);
+    // Other clients must drop the agent too: a plugin deleting an agent otherwise leaves the
+    // app holding a stale agent and tab whose later updates fail with "Agent not found".
+    if (this.onAgentDeleted) {
+      try {
+        await this.onAgentDeleted(agentId, knownWorkspaceId);
+        return;
+      } catch (error) {
+        this.sessionLogger.warn(
+          { err: error, agentId },
+          "Failed to publish agent deletion to active sessions",
+        );
+      }
+    }
+    await this.applyAgentDeletion(agentId, knownWorkspaceId);
+  }
 
-    if (knownWorkspaceId) {
-      await this.emitWorkspaceUpdateForWorkspaceId(knownWorkspaceId);
+  /** Removes a deleted agent from this session's agent and workspace subscriptions. */
+  async applyAgentDeletion(agentId: string, workspaceId: string | null): Promise<void> {
+    await this.agentUpdates.removeAgent(agentId);
+    if (workspaceId) {
+      await this.emitWorkspaceUpdateForWorkspaceId(workspaceId);
     }
   }
 
@@ -7920,6 +7947,23 @@ export class Session {
       type: "agent.timeline.append.response",
       payload: { requestId: msg.requestId, seq, epoch },
     });
+  }
+
+  private async handleMomentumHistoryRequest(
+    msg: Extract<SessionInboundMessage, { type: "momentum.history.request" }>,
+    source?: object,
+  ): Promise<void> {
+    let entries: Awaited<ReturnType<typeof readMomentumHistory>> = [];
+    let error: string | null = null;
+    try {
+      entries = await readMomentumHistory(this.paseoHome, msg.workspaceId);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : String(cause);
+    }
+    this.emitForSource(
+      { type: "momentum.history.response", payload: { requestId: msg.requestId, entries, error } },
+      source,
+    );
   }
 
   private async handleAgentTimelineSearchRequest(

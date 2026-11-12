@@ -1,11 +1,7 @@
 import type { Command } from "commander";
-import { connectToDaemon, resolveAgentId } from "../../utils/client.js";
-import type {
-  CommandError,
-  CommandOptions,
-  OutputSchema,
-  SingleResult,
-} from "../../output/index.js";
+import { connectToDaemon } from "../../utils/client.js";
+import { fetchAgentOrNotFound } from "../../utils/agent-directory.js";
+import type { CommandOptions, OutputSchema, SingleResult } from "../../output/index.js";
 
 interface AgentDetachResult {
   agentId: string;
@@ -28,17 +24,7 @@ export async function runDetachCommand(
   const client = await connectToDaemon({ target: options.daemonTarget });
 
   try {
-    const payload = await client.fetchAgents({ filter: { includeArchived: true } });
-    const agentId = resolveAgentId(
-      agentIdArg,
-      payload.entries.map((entry) => entry.agent),
-    );
-    if (!agentId) {
-      throw {
-        code: "AGENT_NOT_FOUND",
-        message: `Agent not found: ${agentIdArg}`,
-      } satisfies CommandError;
-    }
+    const agentId = (await fetchAgentOrNotFound(client, agentIdArg)).id;
     await client.detachAgent(agentId);
     return { type: "single", data: { agentId, status: "detached" }, schema: detachSchema };
   } finally {

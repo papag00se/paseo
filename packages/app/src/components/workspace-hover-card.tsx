@@ -33,6 +33,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
+import { useFetchQuery } from "@/data/query";
 import {
   COUNTED_CHECK_PRESENTATIONS,
   countCheckPresentations,
@@ -152,9 +153,20 @@ function WorkspaceMomentum({
       ),
     [agents, workspace.workspaceId],
   );
+  // Persisted summaries outlive their agents, so sessions a retention plugin deleted still show
+  // their last summary and next step.
+  const history = useFetchQuery({
+    queryKey: ["momentum-history", workspace.serverId, workspace.workspaceId],
+    queryFn: () => client!.fetchMomentumHistory(workspace.workspaceId),
+    enabled: !!client,
+    dataShape: "list",
+    staleTimeMs: 0,
+  });
+  const refetchHistory = history.refetch;
   const refreshMomentum = useCallback(() => {
     void Promise.all(workspaceAgents.map((agent) => client?.refreshAgent(agent.id)));
-  }, [client, workspaceAgents]);
+    void refetchHistory();
+  }, [client, workspaceAgents, refetchHistory]);
   const summaries = useMemo(
     () =>
       workspaceAgents
@@ -166,13 +178,21 @@ function WorkspaceMomentum({
         ),
     [workspaceAgents],
   );
+  const earlier = useMemo(() => {
+    // Any cached agent without a live summary shows its last cached one: deleted agents, archived
+    // ones, and agents whose records haven't replicated yet.
+    const live = new Set(summaries.map((agent) => agent.id));
+    return (history.data ?? [])
+      .filter((entry) => !live.has(entry.agentId))
+      .slice(0, EARLIER_SESSION_LIMIT);
+  }, [history.data, summaries]);
 
   // Always expose Momentum. Agent records are replicated lazily, so hiding this
   // section until the replica arrives made the feature appear nonexistent.
   return (
     <>
       <View style={styles.separator} />
-      {summaries.length === 0 ? (
+      {summaries.length === 0 && earlier.length === 0 ? (
         <View style={styles.momentumBlock} testID="workspace-momentum-pending">
           <Text style={styles.momentumAgent}>Momentum</Text>
           <Text style={styles.momentumText}>
@@ -182,7 +202,7 @@ function WorkspaceMomentum({
           </Text>
         </View>
       ) : null}
-      {summaries.length > 0 ? (
+      {summaries.length > 0 || earlier.length > 0 ? (
         <Pressable accessibilityRole="button" onPress={refreshMomentum}>
           <Text style={styles.momentumNext}>Refresh</Text>
         </Pressable>
@@ -197,9 +217,26 @@ function WorkspaceMomentum({
           </Text>
         </View>
       ))}
+      {earlier.length > 0 ? (
+        <View style={styles.momentumBlock} testID="workspace-momentum-earlier">
+          <Text style={styles.momentumText}>Earlier sessions</Text>
+        </View>
+      ) : null}
+      {earlier.map((entry) => (
+        <View key={entry.agentId} style={styles.momentumBlock}>
+          <Text style={styles.momentumAgent}>{entry.title ?? "Agent"}</Text>
+          <Text style={styles.momentumText}>{entry.focus}</Text>
+          <Text style={styles.momentumNext}>
+            {entry.state === "waiting_on_you" ? "Was waiting on you: " : "Next step: "}
+            {entry.next}
+          </Text>
+        </View>
+      ))}
     </>
   );
 }
+
+const EARLIER_SESSION_LIMIT = 5;
 
 const ThemedGitBranch = withUnistyles(GitBranch);
 const ThemedFolder = withUnistyles(Folder);

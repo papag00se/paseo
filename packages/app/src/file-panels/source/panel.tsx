@@ -28,6 +28,7 @@ import { FileEditorView } from "./editor/view";
 import { selectSourcePresentation } from "./readonly/presentation";
 import { FileSourceView } from "./readonly/view";
 import { TextFileToolbar, type TextFileView } from "./toolbar";
+import { shouldWrapFile } from "./wrap";
 
 // CodeMirror and native source rendering consume appearance as props. Subscribe at the
 // rendering leaf so theme updates reconfigure it without replacing the editor/model.
@@ -96,6 +97,18 @@ function useTextFileView(
   return [view, setView];
 }
 
+/** Fork: the Wrap toggle. One stored choice for every file; until it is set, the file type decides. */
+function useFileWrap(filename: string) {
+  const { settings, updateSettings } = useAppSettings();
+  const preference = settings.fileWrapLines;
+  const enabled = shouldWrapFile(filename, preference);
+  const onToggle = useCallback(
+    () => void updateSettings({ fileWrapLines: !enabled }),
+    [enabled, updateSettings],
+  );
+  return { preference, toggle: useMemo(() => ({ enabled, onToggle }), [enabled, onToggle]) };
+}
+
 function TooLargeTextFile({ size }: { size: number }) {
   const { t } = useTranslation();
   return (
@@ -118,6 +131,7 @@ function ReadonlyTextFile({
   const text = useFileText(file);
   const { t } = useTranslation();
   const [view, setView] = useTextFileView(params, revision);
+  const wrap = useFileWrap(params.path);
   const sourceLocation = useMemo(
     () => ({ path: params.path, lineStart: params.lineStart, lineEnd: params.lineEnd }),
     [params.lineEnd, params.lineStart, params.path],
@@ -138,6 +152,7 @@ function ReadonlyTextFile({
         lineCount={text.text.split("\n").length}
         view={Preview ? view : undefined}
         onViewChange={Preview ? setView : undefined}
+        wrap={isWeb && !showPreview ? wrap.toggle : undefined}
       />
       {showPreview ? (
         <Preview text={text.text} params={params} workspaceId={workspaceId} host={host} />
@@ -148,6 +163,7 @@ function ReadonlyTextFile({
           location={sourceLocation}
           navigationRevision={revision}
           presentation={presentation}
+          wrapLines={wrap.preference}
         />
       )}
     </View>
@@ -167,6 +183,7 @@ function EditableTextFile({
   const { t } = useTranslation();
   const [model] = useState(() => new FileEditorModel({ file }));
   const [view, setView] = useTextFileView(params, revision);
+  const wrap = useFileWrap(params.path);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [vimMode, setVimMode] = useState<string | null>(settings.vimKeybindings ? "NORMAL" : null);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
@@ -236,6 +253,7 @@ function EditableTextFile({
         cursor={showPreview ? undefined : cursor}
         vimMode={showPreview ? null : vimMode}
         conflict={conflict}
+        wrap={showPreview ? undefined : wrap.toggle}
       />
       {showPreview ? (
         <Preview text={snapshot.content} params={params} workspaceId={workspaceId} host={host} />
@@ -246,6 +264,7 @@ function EditableTextFile({
           location={editorLocation}
           navigationRevision={revision}
           vimEnabled={settings.vimKeybindings}
+          wrapLines={wrap.preference}
           onCursorChange={setCursor}
           onVimModeChange={setVimMode}
         />

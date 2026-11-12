@@ -747,7 +747,7 @@ test("agents.create with internal fails before sending on a host without interna
   await client.close();
 });
 
-test("agent handles delegate create, send, timeline refetch, archive, and local updates", async () => {
+test("agent handles delegate create, send, timeline refetch, archive, delete, and local updates", async () => {
   const { client, ws } = await connectClient();
   const createdAgent = createAgent();
 
@@ -976,6 +976,18 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   });
   expect(agent.current()?.archivedAt).toBe("2026-05-16T01:00:00.000Z");
   expect(agent.archivedAt).toBe("2026-05-16T01:00:00.000Z");
+
+  const deletePromise = agent.delete();
+  const deleteRequest = parseSentSessionMessage(ws.sent.at(-1));
+  expect(deleteRequest).toMatchObject({ type: "delete_agent_request", agentId: "agent_sdk" });
+  ws.message(
+    sessionMessage({
+      type: "agent_deleted",
+      payload: { requestId: deleteRequest.requestId, agentId: "agent_sdk" },
+    }),
+  );
+  await expect(deletePromise).resolves.toBeUndefined();
+  expect(agent.current()).toBeNull();
 
   unsubscribe();
   await client.close();

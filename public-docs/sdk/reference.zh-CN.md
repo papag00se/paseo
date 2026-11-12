@@ -101,6 +101,7 @@ nav: API 参考
 | `commands(options?)`           | `PaseoAgentCommandsResult`        | 向正在运行的会话查询它的斜杠命令和技能，包括内置的。选项：`requestId`。 |
 | `subscribe(handler)`           | 取消订阅函数                      | 把 Agent 目录更新过滤到此 ID，并刷新句柄的属性。                        |
 | `archive()`                    | `{ archivedAt }`                  | 软删除 Agent 并关闭它的运行时。                                         |
+| `delete()`                     | `Promise<void>`                   | 中断并关闭运行时后永久删除 Agent 记录。                                 |
 | `detach()`                     | `Promise<void>`                   | 解除父子关系，但不停止 Agent。                                          |
 
 从 `workspaceId` 到 `archivedAt` 的属性反映句柄最近观察到的快照。由 `ref()` 得到的句柄在 `refresh()`、`run()`、`waitForFinish()`、时间线重新获取或 `subscribe()` 投递快照之前，这些属性都读作 `null`。已观察到的快照中的可选值也读作 `null`。当你需要整个快照，或需要区分这些状态时，请调用 `current()`。

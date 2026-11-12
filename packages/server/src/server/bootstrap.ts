@@ -1038,6 +1038,7 @@ export async function createPaseoDaemon(
     providerSnapshotManager,
     readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
     logger,
+    paseoHome: config.paseoHome,
   });
   momentumService.start();
   logger.info({ elapsed: elapsed() }, "Agent storage initialized");

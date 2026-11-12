@@ -504,6 +504,8 @@ export default function contribute(client: PluginClientContext) {
 }
 ```
 
+`server.paseo` 是子进程已连接的 SDK，与处理函数和钩子收到的 `context.paseo` 相同。用它执行没有调用方的定时任务，例如定期清理。
+
 清理函数可以是异步的。请释放插件创建的计时器、监听器、套接字和其他资源。在重新加载、停用、移除、断开连接或 daemon 关闭时，Paseo 还会移除注册、卸载界面、reject 待处理的 RPC、关闭插件的 daemon 会话并停止它的子进程。
 
 ## 生命周期钩子 {#lifecycle-hooks}

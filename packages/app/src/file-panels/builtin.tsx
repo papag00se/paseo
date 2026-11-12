@@ -7,6 +7,8 @@ import { useSessionStore } from "@/stores/session-store";
 import { FileHtmlPreview } from "./html-preview";
 import { FilePanelLoading } from "./loading";
 import { FileMarkdownPreview } from "./markdown-preview";
+import { CrossnotePreview } from "./markdown-preview/crossnote";
+import { useInstalledPlugin } from "@/plugins/registry";
 import { TextFilePanel, type TextFilePreviewProps } from "./source/panel";
 import type { RenderingFilePanel, SourceFilePanel } from "./catalog";
 
@@ -25,8 +27,28 @@ function HtmlPanel(props: PluginFilePanelProps) {
   return <TextFilePanel {...props} preview={HtmlPreview} />;
 }
 
+/**
+ * Fork: with the Markdown Preview plugin installed on this host, the desktop app's Preview is its
+ * Crossnote render, and Source stays Paseo's editor. Elsewhere Paseo renders the Markdown itself.
+ */
+function MarkdownPreview(props: TextFilePreviewProps) {
+  const crossnote = useInstalledPlugin(props.host.id, MARKDOWN_PREVIEW_PLUGIN_ID);
+  const workspaceRoot = useWorkspace(props.workspaceId, (workspace) => workspace.directory);
+  if (CrossnotePreview && crossnote)
+    return (
+      <CrossnotePreview
+        filePath={props.params.path}
+        workspaceId={props.workspaceId}
+        workspaceRoot={workspaceRoot ?? null}
+        serverId={props.host.id}
+      />
+    );
+  return <BuiltinMarkdownPreview {...props} />;
+}
+const MARKDOWN_PREVIEW_PLUGIN_ID = "markdown-preview";
+
 /** Shows Loading until the rendered Markdown has laid out once; later edits keep the content. */
-function MarkdownPreview({ text, params, workspaceId, host }: TextFilePreviewProps) {
+function BuiltinMarkdownPreview({ text, params, workspaceId, host }: TextFilePreviewProps) {
   const client = useSessionStore((state) => state.sessions[host.id]?.client ?? null);
   const workspaceRoot = useWorkspace(workspaceId, (workspace) => workspace.directory);
   const [rendered, setRendered] = useState(false);

@@ -179,6 +179,20 @@ describe("agent lifecycle commands", () => {
     expect(manager.cancelledAgentIds).toEqual(["agent-1"]);
   });
 
+  test("closes the runtime when the provider never acknowledges the stop", async () => {
+    const storage = new FakeLifecycleAgentStorage();
+    const manager = new FakeLifecycleAgentManager(storage);
+    const agent = managedAgent("agent-1", "running");
+    manager.liveAgents.set("agent-1", agent);
+    manager.inFlightAgentIds.add("agent-1");
+    manager.rejectedCancellationAgentIds.add("agent-1");
+
+    await expect(
+      cancelAgentRunCommand({ agentManager: manager, logger }, "agent-1"),
+    ).resolves.toEqual({ agent, cancelled: true });
+    expect(manager.closedAgentIds).toEqual(["agent-1"]);
+  });
+
   test("accepts a stop when the run settles during cancellation", async () => {
     const storage = new FakeLifecycleAgentStorage();
     const manager = new FakeLifecycleAgentManager(storage);

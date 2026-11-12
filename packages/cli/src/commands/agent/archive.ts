@@ -1,6 +1,6 @@
 import { Command } from "commander";
-import { connectToDaemon, resolveAgentId } from "../../utils/client.js";
-import { fetchAllAgents } from "../../utils/agent-directory.js";
+import { connectToDaemon } from "../../utils/client.js";
+import { fetchAgentOrNotFound } from "../../utils/agent-directory.js";
 import type {
   CommandOptions,
   SingleResult,
@@ -57,20 +57,8 @@ export async function runArchiveCommand(
   const client = await connectToDaemon({ target: options.daemonTarget });
 
   try {
-    const agents = await fetchAllAgents(client, { filter: { includeArchived: true } });
-    const agentId = resolveAgentId(agentIdArg, agents);
-    if (!agentId) {
-      const error: CommandError = {
-        code: "AGENT_NOT_FOUND",
-        message: `Agent not found: ${agentIdArg}`,
-        details: 'Use "paseo ls" to list available agents',
-      };
-      throw error;
-    }
-    const agent = agents.find((entry) => entry.id === agentId);
-    if (!agent) {
-      throw new Error(`Resolved agent missing from fetched agents: ${agentId}`);
-    }
+    const agent = await fetchAgentOrNotFound(client, agentIdArg);
+    const agentId = agent.id;
 
     // Check if agent is already archived
     if (agent.archivedAt) {

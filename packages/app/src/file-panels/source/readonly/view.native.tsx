@@ -16,6 +16,8 @@ interface FileSourceViewProps {
   navigationRevision: number;
   presentation: Exclude<SourcePresentation, "unsupported">;
   theme: EditorVisualTheme;
+  /** Web only (the Wrap toggle is not offered on native, whose lines scroll horizontally). */
+  wrapLines?: boolean | null;
 }
 
 /** Lines past the opening line highlighted before the rest of a large file. */

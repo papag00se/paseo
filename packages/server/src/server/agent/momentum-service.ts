@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
@@ -15,6 +15,7 @@ import {
   type StructuredGenerationDaemonConfig,
 } from "./structured-generation-providers.js";
 import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
+import { MomentumCache } from "./momentum-cache.js";
 
 const MOMENTUM_SCHEMA = z.object({
   focus: z.string().trim().min(1).max(220),
@@ -34,6 +35,7 @@ export class MomentumService {
   private readonly queued = new Set<string>();
   private readonly running = new Set<string>();
   private unsubscribe: (() => void) | null = null;
+  private readonly cache: MomentumCache;
 
   constructor(
     private readonly deps: {
@@ -42,8 +44,11 @@ export class MomentumService {
       providerSnapshotManager: Pick<ProviderSnapshotManager, "listProviders">;
       readDaemonConfig: () => StructuredGenerationDaemonConfig;
       logger: StructuredGenerationLogger & Logger;
+      paseoHome: string;
     },
-  ) {}
+  ) {
+    this.cache = new MomentumCache(deps.paseoHome);
+  }
 
   start(): void {
     if (this.unsubscribe) return;
@@ -72,7 +77,28 @@ export class MomentumService {
 
   private async backfillStartupCandidates(): Promise<void> {
     const cutoff = Date.now() - RECENT_ACTIVITY_MS;
-    const candidates = (await this.deps.agentStorage.list())
+    const records = await this.deps.agentStorage.list();
+    // Capture summaries already on agent records before anything deletes those agents.
+    try {
+      await this.cache.record(
+        records.flatMap((record) =>
+          record.momentum && record.workspaceId && !record.internal && !isDelegatedAgent(record)
+            ? [
+                {
+                  ...record.momentum,
+                  agentId: record.id,
+                  workspaceId: record.workspaceId,
+                  title: record.title ?? null,
+                },
+              ]
+            : [],
+        ),
+        new Set(records.map((record) => record.id)),
+      );
+    } catch (error) {
+      this.deps.logger.warn({ err: error }, "Momentum cache seeding failed");
+    }
+    const candidates = records
       .filter(
         (agent) =>
           !agent.archivedAt &&
@@ -88,7 +114,9 @@ export class MomentumService {
         await ensureAgentLoaded(candidate.id, {
           agentManager: this.deps.agentManager,
           agentStorage: this.deps.agentStorage,
-          ...(existsSync(candidate.cwd) ? {} : { cwdOverride: process.env.HOME ?? process.cwd() }),
+          ...((await directoryExists(candidate.cwd))
+            ? {}
+            : { cwdOverride: process.env.HOME ?? process.cwd() }),
           logger: this.deps.logger,
         });
         await this.refresh(candidate.id);
@@ -156,16 +184,32 @@ export class MomentumService {
         agentConfigOverrides: { title: "Momentum summary", internal: true },
         logger: this.deps.logger,
       });
-      this.deps.agentManager.setMomentum(agent.id, {
-        ...summary,
-        sourceUpdatedAt,
-        generatedAt: new Date().toISOString(),
-      });
+      const momentum = { ...summary, sourceUpdatedAt, generatedAt: new Date().toISOString() };
+      this.deps.agentManager.setMomentum(agent.id, momentum);
+      if (agent.workspaceId) {
+        await this.cache.record([
+          {
+            ...momentum,
+            agentId: agent.id,
+            workspaceId: agent.workspaceId,
+            title: agent.config.title ?? null,
+          },
+        ]);
+      }
     } catch (error) {
       this.deps.logger.warn({ err: error, agentId }, "Momentum summary generation failed");
     } finally {
       this.running.delete(agentId);
     }
+  }
+}
+
+async function directoryExists(directory: string): Promise<boolean> {
+  try {
+    await access(directory);
+    return true;
+  } catch {
+    return false;
   }
 }
 
