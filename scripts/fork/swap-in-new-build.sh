@@ -32,6 +32,13 @@ mv -T "$DIR/app" "$DIR/app.old"
 mv -T "$DIR/app.new" "$DIR/app"
 
 echo "Swapped. Relaunching Paseo..."
-setsid -f "$DIR/app/Paseo" >/dev/null 2>&1 < /dev/null
+if [ "${PASEO_SWAP_SCOPE:-}" = 1 ] && command -v systemd-run >/dev/null; then
+  # Launched from a transient unit (deploy-with-agent-resume.sh): start Paseo in its own scope so it
+  # is not killed when that unit finishes.
+  systemd-run --user --quiet --scope --slice=app.slice --unit="app-Paseo-swap-$(date +%s).scope" \
+    -- setsid -f "$DIR/app/Paseo" >/dev/null 2>&1 < /dev/null
+else
+  setsid -f "$DIR/app/Paseo" >/dev/null 2>&1 < /dev/null
+fi
 echo "Done. Previous build kept at $DIR/app.old"
 echo "Rollback: quit Paseo, then: mv -T $DIR/app $DIR/app.new && mv -T $DIR/app.old $DIR/app"
