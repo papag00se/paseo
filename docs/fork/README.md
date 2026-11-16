@@ -30,7 +30,7 @@ About 19,000 stored agents (mostly subagents) froze the daemon: every `paseo age
 - `paseo agent archive/reload/detach/stop <id>` resolve the agent with one `fetch_agent` request; the daemon matches ID, unique prefix or exact title.
 - Stop closes the provider runtime when an interrupt is not acknowledged. The agent shows as closed and resumes from its saved session on the next prompt, like an idle-collected runtime. Replace, reload and rewind still refuse.
 - SDK agent handles have `delete()`; plugin server entries get `server.paseo` for timer-driven work.
-- The [Agent retention plugin](https://github.com/papag00se/paseo-agent-retention) (`~/Work/paseo-agent-retention`) deletes idle subagents (default 1 day, logs discarded) and parent agents (default 60 days, Pi logs copied to `~/paseo-agent-logs` first), and purges those backups after 180 days.
+- The [Agent retention plugin](https://github.com/papag00se/paseo-agent-retention) (`~/Work/paseo-agent-retention`) classifies agents by who started them (hand-started, worker of a coordinator, ephemeral subagent), deletes ephemeral subagents after 1 idle day, deletes hand-started and worker agents after 60 idle days once their Pi log is copied to `~/paseo-agent-logs` (with an `INDEX.md` and a size cap), optionally archives idle agents (no copy; Paseo keeps the conversation), keeps a protected list agents can join with their own tool, and lists idle open agents with memory, retention reason and a Close button. See its `OVERVIEW.md`.
 
 ## Idle runtime control (2026-11-16)
 
