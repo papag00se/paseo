@@ -101,6 +101,8 @@ cp -a packages/desktop/release/linux-unpacked ~/.local/opt/paseo/app.new
 
 `~/.local/opt/paseo/swap-in-new-build.sh` is a link to [`scripts/fork/swap-in-new-build.sh`](../../scripts/fork/swap-in-new-build.sh). The CLI `~/.local/bin/paseo` points into the installed app.
 
+`scripts/fork/deploy-with-agent-resume.sh` does all of this unattended: it records the agents that are running, merges `agent` into `main` (aborting cleanly on a conflict), builds, stages and swaps the app, waits for the new daemon, sends each agent that was running "Paseo was restarted for a planned update while you were working. Resume exactly where you left off." (reloading it first if it did not take the message), and checks that every plugin is running. Launch it outside the app so it survives the restart: `systemd-run --user --unit=paseo-deploy --collect ~/src/paseo/scripts/fork/deploy-with-agent-resume.sh`, and follow `/var/tmp/paseo-deploy/deploy.log`. `--dry-run` only records agents, checks the merge and lists plugin status. It does not run `npm ci`; run that first when `package-lock.json` changed. If the new daemon never answers, it restores the previous build and logs which agents were not resumed.
+
 The bundled updater still names `getpaseo/paseo`. Installing an upstream update would replace these changes. Rebuild from this repo instead.
 
 ## Plugins (separate repos, loaded from `~/Work`)
