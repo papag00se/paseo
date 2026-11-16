@@ -1,4 +1,7 @@
-import { createIdleRuntimeCleanup } from "./agent/idle-runtime-cleanup/index.js";
+import {
+  createIdleRuntimeCleanup,
+  DEFAULT_IDLE_MINUTES as DEFAULT_IDLE_RUNTIME_MINUTES,
+} from "./agent/idle-runtime-cleanup/index.js";
 import {
   createFinishSubscriptions,
   createFinishObservation,
@@ -463,6 +466,7 @@ export interface PaseoDaemonConfig {
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
   idleRuntimeCleanup?: boolean;
+  idleRuntimeCleanupMinutes?: number;
   providerCatalogRefreshTimeoutMs?: number;
   metadataGeneration?: {
     providers?: Array<{
@@ -592,6 +596,9 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
     idleRuntimeCleanup: config.idleRuntimeCleanup !== false,
+    ...(config.idleRuntimeCleanupMinutes !== undefined
+      ? { idleRuntimeCleanupMinutes: config.idleRuntimeCleanupMinutes }
+      : {}),
     appendSystemPrompt: config.appendSystemPrompt ?? "",
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
@@ -1488,10 +1495,12 @@ export async function createPaseoDaemon(
 
   const idleRuntimeCleanup = createIdleRuntimeCleanup({
     enabled: daemonConfigStore.get().idleRuntimeCleanup !== false,
+    idleMinutes: daemonConfigStore.get().idleRuntimeCleanupMinutes,
     runtimes: () => agentManager.getRuntimeCleanupCandidates(),
-    isProtected: (agentId) =>
-      finishSubscriptions.hasPendingForCaller(agentId) ||
-      (wsServer?.agentMessages.hasPending(agentId) ?? false),
+    protection: (agentId) =>
+      finishSubscriptions.describePendingForCaller(agentId) ??
+      wsServer?.agentMessages.describePending(agentId) ??
+      null,
     logger,
   });
 
@@ -1811,6 +1820,7 @@ export async function createPaseoDaemon(
                 daemonStatusRpc: dependencies.serverFeatureOverrides?.daemonStatusRpc,
                 relayConfig: dependencies.serverFeatureOverrides?.relayConfig,
                 startPaused: true,
+                idleRuntimes: idleRuntimeCleanup,
               },
               workspaceAutoName,
               workspaceRuntimeStore,
@@ -2054,8 +2064,18 @@ async function closeAllAgents(logger: Logger, agentManager: AgentManager): Promi
 
 export function connectIdleRuntimeCleanupConfig(
   store: DaemonConfigStore,
-  cleanup: Pick<ReturnType<typeof createIdleRuntimeCleanup>, "setEnabled">,
+  cleanup: Pick<ReturnType<typeof createIdleRuntimeCleanup>, "setEnabled" | "setIdleMinutes">,
 ): () => void {
+  const applyMinutes = (value: unknown) =>
+    cleanup.setIdleMinutes(typeof value === "number" ? value : DEFAULT_IDLE_RUNTIME_MINUTES);
   cleanup.setEnabled(store.get().idleRuntimeCleanup !== false);
-  return store.onFieldChange("idleRuntimeCleanup", (value) => cleanup.setEnabled(value !== false));
+  applyMinutes(store.get().idleRuntimeCleanupMinutes);
+  const stopEnabled = store.onFieldChange("idleRuntimeCleanup", (value) =>
+    cleanup.setEnabled(value !== false),
+  );
+  const stopMinutes = store.onFieldChange("idleRuntimeCleanupMinutes", applyMinutes);
+  return () => {
+    stopEnabled();
+    stopMinutes();
+  };
 }

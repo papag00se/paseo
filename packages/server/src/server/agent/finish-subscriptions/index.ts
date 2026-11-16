@@ -51,6 +51,8 @@ export interface FinishSubscriptions {
   start(): Promise<void>;
   /** Pending notification intent, including registration, recovery and unacknowledged delivery. */
   hasPendingForCaller(agentId: string): boolean;
+  /** Why `hasPendingForCaller` is true: a registration or recovery in progress, or the watched children. */
+  describePendingForCaller(agentId: string): string | null;
   register(
     input: Omit<FinishSubscription, "id">,
     pendingDispatch?: boolean,
@@ -303,14 +305,24 @@ export function createFinishSubscriptions(deps: Dependencies): FinishSubscriptio
     }
   }
 
-  return {
-    hasPendingForCaller(agentId) {
-      if (recovering || registering.has(agentId)) return true;
-      for (const group of watches.values()) {
-        for (const watch of group) if (watch.records[0]!.callerAgentId === agentId) return true;
+  function describePendingForCaller(agentId: string): string | null {
+    if (recovering) return "finish subscriptions are still recovering after daemon start";
+    if (registering.has(agentId)) return "a finish subscription is being registered";
+    const children = new Set<string>();
+    for (const group of watches.values()) {
+      for (const watch of group) {
+        const record = watch.records[0]!;
+        if (record.callerAgentId === agentId) children.add(record.childAgentId);
       }
-      return false;
-    },
+    }
+    return children.size
+      ? `pending finish subscription waiting on ${[...children].join(", ")}`
+      : null;
+  }
+
+  return {
+    hasPendingForCaller: (agentId) => describePendingForCaller(agentId) !== null,
+    describePendingForCaller,
     start: () =>
       serialize(async () => {
         const groups = new Map<string, FinishSubscription[]>();

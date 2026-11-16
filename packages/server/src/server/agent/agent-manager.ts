@@ -1864,10 +1864,10 @@ export class AgentManager {
         identity = Object.freeze({});
         this.runtimeCleanupIdentities.set(agent.session, identity);
       }
-      const isEligible = () =>
-        this.agents.get(agent.id) === agent &&
-        agent.updatedAt === updatedAt &&
-        this.runtimeHasNoPendingWork(agent);
+      const retention = () =>
+        this.agents.get(agent.id) !== agent || agent.updatedAt !== updatedAt
+          ? "the agent was active again or replaced"
+          : this.runtimeRetentionReason(agent);
       candidates.push({
         identity,
         agentId: agent.id,
@@ -1875,7 +1875,7 @@ export class AgentManager {
         provider: agent.provider,
         sessionId: agent.persistence?.sessionId ?? null,
         lastActivityAt: updatedAt.getTime(),
-        isEligible,
+        retention,
         canStopRuntime: agent.session.canStopRuntime?.bind(agent.session),
         closeIfEligible: async (revalidate) => {
           if (!agent.persistence?.sessionId) return false;
@@ -1884,7 +1884,7 @@ export class AgentManager {
           this.collectingRuntimes.add(agent.id);
           try {
             return await this.runLifecycleMutation(agent.id, () =>
-              this.closeAgentRuntime(agent.id, () => isEligible() && revalidate()),
+              this.closeAgentRuntime(agent.id, () => retention() === null && revalidate()),
             );
           } finally {
             this.collectingRuntimes.delete(agent.id);
@@ -1895,20 +1895,26 @@ export class AgentManager {
     return candidates;
   }
 
-  private runtimeHasNoPendingWork(agent: LiveManagedAgent): boolean {
-    return (
-      agent.lifecycle === "idle" &&
-      !agent.internal &&
-      agent.activeForegroundTurnId === null &&
-      !this.runs.hasRun(agent.id) &&
-      !agent.pendingReplacement &&
-      agent.pendingPermissions.size === 0 &&
-      agent.inFlightPermissionResponses.size === 0 &&
-      (this.collectingRuntimes.has(agent.id) || !this.lifecycleMutationTails.has(agent.id)) &&
-      !this.foregroundMutationTails.has(agent.id) &&
-      !this.sessionEventTails.has(agent.id) &&
-      !this.providerSubagents.list(agent.id).some((child) => child.status === "running")
-    );
+  /** Why this agent's runtime cannot be released right now, or null when no work is pending. */
+  private runtimeRetentionReason(agent: LiveManagedAgent): string | null {
+    if (agent.internal) return "internal agent";
+    if (agent.lifecycle !== "idle") return `agent lifecycle is ${agent.lifecycle}`;
+    if (agent.activeForegroundTurnId !== null || this.runs.hasRun(agent.id)) {
+      return "a turn is running";
+    }
+    if (agent.pendingReplacement) return "a prompt replacement is pending";
+    if (agent.pendingPermissions.size > 0 || agent.inFlightPermissionResponses.size > 0) {
+      return "a permission request is pending";
+    }
+    if (!this.collectingRuntimes.has(agent.id) && this.lifecycleMutationTails.has(agent.id)) {
+      return "a lifecycle operation (reload, archive, close, rename) is in flight";
+    }
+    if (this.foregroundMutationTails.has(agent.id)) return "a prompt is being admitted";
+    if (this.sessionEventTails.has(agent.id)) return "provider events are still being processed";
+    const subagent = this.providerSubagents
+      .list(agent.id)
+      .find((child) => child.status === "running");
+    return subagent ? `provider subagent ${subagent.id} is running` : null;
   }
 
   closeAgent(agentId: string): Promise<void> {

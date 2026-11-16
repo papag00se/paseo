@@ -307,9 +307,14 @@ test("runtime safety sees queued messages until provider dispatch settles", asyn
     source: { kind: "agent-message", agentId: "child" },
   });
   expect(delivery.hasPending("parent")).toBe(true);
+  expect(delivery.describePending("parent")).toBe("agent messages are queued for delivery");
   clock.advance(2000);
   expect(delivery.hasPending("parent")).toBe(true);
+  expect(delivery.describePending("parent")).toBe(
+    "an agent message was sent and the provider has not acknowledged it",
+  );
   release();
   await delivery.close();
   expect(delivery.hasPending("parent")).toBe(false);
+  expect(delivery.describePending("parent")).toBeNull();
 });

@@ -3331,6 +3331,36 @@ export class DaemonClient {
     }
   }
 
+  /**
+   * Releases an idle agent's provider runtime and keeps the agent resumable. The daemon refuses while
+   * the agent or one of its subagents is working or waited on; a refusal returns `closed: false` and
+   * the reason, it does not throw.
+   */
+  async closeAgentRuntime(
+    agentId: string,
+  ): Promise<{ closed: true } | { closed: false; reason: string }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.runtime.close.response">({
+        message: { type: "agent.runtime.close.request", agentId },
+      });
+    if (payload.error) throw new Error(payload.error);
+    return payload.closed
+      ? { closed: true }
+      : { closed: false, reason: payload.reason ?? "refused" };
+  }
+
+  /** Idle agents whose runtimes the daemon's idle cleanup refuses to release, with the reason for each. */
+  async getAgentRuntimeRetention(): Promise<
+    CorrelatedResponsePayload<"agent.runtime.get_retention.response">["retained"]
+  > {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.runtime.get_retention.response">({
+        message: { type: "agent.runtime.get_retention.request" },
+      });
+    if (payload.error) throw new Error(payload.error);
+    return payload.retained;
+  }
+
   async updateAgent(
     agentId: string,
     updates: { name?: string; labels?: Record<string, string> },

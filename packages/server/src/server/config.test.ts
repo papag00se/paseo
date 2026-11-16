@@ -62,6 +62,12 @@ describe("server config", () => {
       JSON.stringify({ agents: { idleRuntimeCleanup: false } }),
     );
     expect(loadConfig(paseoHome, { env: {} }).idleRuntimeCleanup).toBe(false);
+    expect(loadConfig(paseoHome, { env: {} }).idleRuntimeCleanupMinutes).toBeUndefined();
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({ agents: { idleRuntimeCleanupMinutes: 15 } }),
+    );
+    expect(loadConfig(paseoHome, { env: {} }).idleRuntimeCleanupMinutes).toBe(15);
   });
 
   test("loads the provider catalog refresh timeout", async () => {

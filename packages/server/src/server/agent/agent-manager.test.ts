@@ -12200,7 +12200,7 @@ function runtimeCleanup(manager: AgentManager) {
     runtimes: () => manager.getRuntimeCleanupCandidates(),
     logger,
     now: () => now,
-    isProtected: (agentId) => protectedCaller(agentId),
+    protection: (agentId) => (protectedCaller(agentId) ? "caller is waiting" : null),
     schedule: () => () => {},
   });
   onTestFinished(() => cleanup.close());
@@ -12315,6 +12315,17 @@ test("idle cleanup retains a parent whose idle managed child owns background wor
   h.probes[1] = async () => false;
   expect((await h.sweep({ now: h.later(61) })).collected).toEqual([]);
   expect(h.closes).toBe(0);
+});
+
+test("a runtime's retention reason names the pending work, and clears when the work ends", async () => {
+  const h = idleCleanupHarness();
+  const agent = await h.create();
+  const reason = () => h.manager.getRuntimeCleanupCandidates()[0]!.retention();
+  expect(reason()).toBeNull();
+  const running = h.manager.runAgent(agent.id, "work");
+  expect(reason()).toBe("a turn is running");
+  await running;
+  expect(reason()).toBeNull();
 });
 
 test("idle cleanup rechecks queued deliveries admitted during the safety probe", async () => {

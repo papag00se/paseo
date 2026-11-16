@@ -513,6 +513,11 @@
         "idleRuntimeCleanup": {
           "type": "boolean"
         },
+        "idleRuntimeCleanupMinutes": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 9007199254740991
+        },
         "catalogRefreshTimeoutMs": {
           "type": "integer",
           "exclusiveMinimum": 0,

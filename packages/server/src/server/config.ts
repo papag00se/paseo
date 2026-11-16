@@ -590,10 +590,20 @@ export type ResolvedDaemonSettings = Pick<
   | "relayRequireProtectedSecurity"
   | "appBaseUrl"
   | "idleRuntimeCleanup"
+  | "idleRuntimeCleanupMinutes"
   | "providerCatalogRefreshTimeoutMs"
   | "metadataGeneration"
   | "providerOverrides"
 >;
+
+function resolveIdleRuntimeCleanup(
+  persisted: PersistedConfig,
+): Pick<ResolvedDaemonSettings, "idleRuntimeCleanup" | "idleRuntimeCleanupMinutes"> {
+  return {
+    idleRuntimeCleanup: persisted.agents?.idleRuntimeCleanup ?? true,
+    idleRuntimeCleanupMinutes: persisted.agents?.idleRuntimeCleanupMinutes,
+  };
+}
 
 export function resolveConfigFromPersisted(
   paseoHome: string,
@@ -676,7 +686,7 @@ export function resolveReloadableConfig(
     plugins: persisted.plugins,
     relayEnabled: relay.enabled,
     relayRequireProtectedSecurity: relay.requireProtectedSecurity,
-    idleRuntimeCleanup: persisted.agents?.idleRuntimeCleanup ?? true,
+    ...resolveIdleRuntimeCleanup(persisted),
     providerCatalogRefreshTimeoutMs: persisted.agents?.catalogRefreshTimeoutMs,
     metadataGeneration: persisted.agents?.metadataGeneration,
     providerOverrides: extractProviderOverrides(

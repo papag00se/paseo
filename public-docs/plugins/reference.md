@@ -630,6 +630,8 @@ export default function contribute(client: PluginClientContext) {
 
 `server.paseo` is the subprocess's connected SDK, the same one handlers and hooks receive as `context.paseo`. Use it for timer-driven work that has no caller, such as periodic cleanup.
 
+Two SDK calls manage idle agent runtimes. `paseo.agents.ref(id).close()` releases one agent's provider process and memory but keeps the agent and its conversation, which resume on the next prompt. It resolves `{ closed: true }`, or `{ closed: false, reason }` while the agent or one of its subagents is working, waited on by another agent, or has a message in flight. `paseo.agents.retainedRuntimes()` lists the idle agents the daemon's own cleanup keeps open and why, once they have been idle past the daemon's idle period.
+
 Cleanup can be async. Release timers, watchers, sockets, and other resources created by the plugin. Paseo also removes registrations, unmounts surfaces, rejects pending RPCs, closes the plugin's daemon session, and stops its subprocess on reload, disable, removal, disconnect, or daemon shutdown.
 
 ## Lifecycle hooks

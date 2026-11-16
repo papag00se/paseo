@@ -389,11 +389,23 @@ export interface PaseoAgentHandle {
    */
   commands(options?: PaseoAgentCommandsOptions): Promise<PaseoAgentCommandsResult>;
   archive(): Promise<{ archivedAt: string }>;
+  /**
+   * Releases an idle agent's provider runtime (its process and memory) and keeps the agent and its
+   * conversation. The next prompt resumes it. Refuses, with the reason, while the agent or one of
+   * its subagents is working or waited on.
+   */
+  close(): Promise<PaseoAgentCloseResult>;
   /** Permanently deletes the agent record, interrupting and closing its runtime first. */
   delete(): Promise<void>;
   detach(): Promise<void>;
   subscribe(handler: (update: PaseoAgentUpdate) => void): () => void;
 }
+
+export type PaseoAgentCloseResult = { closed: true } | { closed: false; reason: string };
+
+export type PaseoRetainedRuntime = Awaited<
+  ReturnType<DaemonClient["getAgentRuntimeRetention"]>
+>[number];
 
 export interface PaseoAgentActions {
   list(options: PaseoAgentListOptions & { subscribe: {} }): Promise<
@@ -404,6 +416,8 @@ export interface PaseoAgentActions {
   >;
   list(options?: PaseoAgentListOptions): Promise<PaseoAgentListResult>;
   ref(agent: string | PaseoAgent): PaseoAgentHandle;
+  /** Idle agents whose runtimes the daemon keeps open, with why. Only agents idle past the daemon's idle period appear. */
+  retainedRuntimes(): Promise<PaseoRetainedRuntime[]>;
   create(options: PaseoAgentCreateOptions): Promise<PaseoAgentHandle>;
   /**
    * Local event subscription over the low-level driver's agent_update stream.
@@ -767,6 +781,7 @@ export function createPaseoApi(
     agents: {
       list: listAgents,
       ref: (agent) => createAgentHandle(agent),
+      retainedRuntimes: () => daemonClient.getAgentRuntimeRetention(),
       create: (options) => createAgent(options),
       subscribe: listenAgents,
     },
@@ -1030,6 +1045,7 @@ function createAgentHandleFactory(
         }
         return result;
       },
+      close: () => daemonClient.closeAgentRuntime(id),
       delete: async () => {
         await daemonClient.deleteAgent(id);
         current = null;

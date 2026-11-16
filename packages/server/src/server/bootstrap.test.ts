@@ -86,6 +86,7 @@ function liveCleanupHost() {
             relay: { enabled: true },
             mcp: { injectIntoAgents: false },
             idleRuntimeCleanup: persisted.agents?.idleRuntimeCleanup ?? true,
+            idleRuntimeCleanupMinutes: persisted.agents?.idleRuntimeCleanupMinutes,
           }),
           overrideControlledPaths: [],
         }),
@@ -102,7 +103,7 @@ function liveCleanupHost() {
     sessionId: "session",
     parentAgentId: undefined,
     lastActivityAt: 0,
-    isEligible: () => !closed,
+    retention: () => (closed ? "closed" : null),
     closeIfEligible: async (eligible) => {
       if (!eligible()) return false;
       closed = true;
@@ -113,7 +114,7 @@ function liveCleanupHost() {
     enabled: true,
     now: () => minutes * 60_000,
     runtimes: () => [runtime],
-    isProtected: () => protectedCaller,
+    protection: () => (protectedCaller ? "caller is waiting" : null),
     logger: createTestLogger(),
     schedule: () => () => {},
   });
@@ -187,6 +188,36 @@ test.each([false, true])(
     refuse();
   },
 );
+
+test("bootstrap's idle period binding follows patches and config-file reloads, and reverts to an hour", async () => {
+  const patched = liveCleanupHost();
+  await patched.store.patch({ idleRuntimeCleanupMinutes: 90 });
+  expect(loadPersistedConfig(patched.home).agents?.idleRuntimeCleanupMinutes).toBe(90);
+  expect((await patched.sweep(89)).collected).toEqual([]);
+  expect((await patched.sweep(90)).collected).toHaveLength(1);
+
+  const reloaded = liveCleanupHost();
+  writeFileSync(
+    path.join(reloaded.home, "config.json"),
+    JSON.stringify({ version: 1, agents: { idleRuntimeCleanupMinutes: 10 } }),
+  );
+  expect(await reloaded.store.reload()).toEqual({
+    appliedPaths: ["agents.idleRuntimeCleanupMinutes"],
+    restartRequiredPaths: [],
+    overrideControlledPaths: [],
+  });
+  expect((await reloaded.sweep(9)).collected).toEqual([]);
+  writeFileSync(path.join(reloaded.home, "config.json"), JSON.stringify({ version: 1 }));
+  await reloaded.store.reload();
+  expect((await reloaded.sweep(59)).collected).toEqual([]);
+  expect((await reloaded.sweep(60)).collected).toHaveLength(1);
+});
+
+test("the idle period rejects values under five minutes", async () => {
+  const host = liveCleanupHost();
+  await expect(host.store.patch({ idleRuntimeCleanupMinutes: 4 })).rejects.toThrow();
+  expect(host.store.get().idleRuntimeCleanupMinutes).toBeUndefined();
+});
 
 test("disposing bootstrap's binding stops configuration delivery", async () => {
   const host = liveCleanupHost();

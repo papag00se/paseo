@@ -1,5 +1,6 @@
 import { type WorkspaceRuntimeStore } from "./workspace-runtime-store/index.js";
 import type { AgentMessageDelivery } from "./agent/agent-messages/index.js";
+import type { IdleRuntimeControl } from "./agent/idle-runtime-cleanup/index.js";
 import { AgentDirectory } from "./agent/directory.js";
 import { ConnectedHostSession } from "./connected-hosts/index.js";
 import type { ConnectedHosts } from "./connected-hosts/index.js";
@@ -470,6 +471,7 @@ export interface SessionOptions {
   agentStorage: AgentStorage;
   messageReceipts: Pick<MessageReceipts, "send">;
   agentMessages: AgentMessageDelivery;
+  idleRuntimes?: IdleRuntimeControl;
   creationService: Pick<CreationService, "create" | "subscribe">;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
@@ -830,6 +832,7 @@ export class Session {
   private readonly workspaceScripts: WorkspaceScriptsService;
   private readonly messageReceipts: Pick<MessageReceipts, "send">;
   private readonly agentMessages: AgentMessageDelivery;
+  private readonly idleRuntimes: IdleRuntimeControl | undefined;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
   private readonly creationService: Pick<CreationService, "create" | "subscribe">;
 
@@ -918,6 +921,7 @@ export class Session {
     this.paseoHome = paseoHome;
     this.messageReceipts = options.messageReceipts;
     this.agentMessages = options.agentMessages;
+    this.idleRuntimes = options.idleRuntimes;
     this.creationService = options.creationService;
     this.projectIcons = new ProjectIconReader(paseoHome);
     this.worktreesRoot = worktreesRoot;
@@ -2770,6 +2774,10 @@ export class Session {
     switch (msg.type) {
       case "agent.detach.request":
         return this.handleDetachAgentRequest(msg.agentId, msg.requestId);
+      case "agent.runtime.close.request":
+        return this.handleAgentRuntimeCloseRequest(msg.agentId, msg.requestId);
+      case "agent.runtime.get_retention.request":
+        return this.handleAgentRuntimeRetentionRequest(msg.requestId);
       default:
         return undefined;
     }
@@ -3464,6 +3472,57 @@ export class Session {
           agentId,
           accepted: false,
           error: message,
+        },
+      });
+    }
+  }
+
+  private async handleAgentRuntimeCloseRequest(agentId: string, requestId: string): Promise<void> {
+    const respond = (outcome: { closed: boolean; reason: string | null; error: string | null }) =>
+      this.emit({
+        type: "agent.runtime.close.response",
+        payload: { requestId, agentId, ...outcome },
+      });
+    try {
+      if (!this.idleRuntimes) throw new Error("This daemon does not manage idle runtimes");
+      const result = await this.idleRuntimes.closeNow(agentId);
+      this.sessionLogger.info({ agentId, requestId, ...result }, "Closed agent runtime on request");
+      respond(
+        result.closed
+          ? { closed: true, reason: null, error: null }
+          : { closed: false, reason: result.reason, error: null },
+      );
+    } catch (error) {
+      const message = getErrorMessageOr(error, "Failed to close agent runtime");
+      this.sessionLogger.error({ err: error, agentId, requestId }, "Failed to close agent runtime");
+      respond({ closed: false, reason: null, error: message });
+    }
+  }
+
+  private async handleAgentRuntimeRetentionRequest(requestId: string): Promise<void> {
+    try {
+      if (!this.idleRuntimes) throw new Error("This daemon does not manage idle runtimes");
+      this.emit({
+        type: "agent.runtime.get_retention.response",
+        payload: {
+          requestId,
+          retained: this.idleRuntimes.retained().map((entry) => ({
+            agentId: entry.agentId,
+            provider: entry.provider,
+            reason: entry.reason,
+            lastActivityAt: new Date(entry.lastActivityAt).toISOString(),
+            since: new Date(entry.since).toISOString(),
+          })),
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.runtime.get_retention.response",
+        payload: {
+          requestId,
+          retained: [],
+          error: getErrorMessageOr(error, "Failed to list retained runtimes"),
         },
       });
     }
