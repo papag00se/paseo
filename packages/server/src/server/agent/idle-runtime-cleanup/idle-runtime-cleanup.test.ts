@@ -1,5 +1,4 @@
 import { expect, onTestFinished, test } from "vitest";
-import { createTestLogger } from "../../../test-utils/test-logger.js";
 import { createIdleRuntimeCleanup, type RuntimeCleanupCandidate } from "./index.js";
 
 function deferred<T>() {
@@ -29,7 +28,11 @@ class Runtime {
       provider: "test",
       sessionId: this.resumable ? this.id : null,
       lastActivityAt: activity,
-      isEligible: () => !this.closed && !this.busy && this.activity === activity,
+      retention: () => {
+        if (this.closed) return "closed";
+        if (this.busy) return "agent lifecycle is running";
+        return this.activity === activity ? null : "the agent was active again or replaced";
+      },
       canStopRuntime: this.probe,
       closeIfEligible: async (eligible) => {
         await this.admitClose?.();
@@ -41,7 +44,19 @@ class Runtime {
     };
   }
 }
-function scenario(enabled = true) {
+function spyLogger() {
+  const lines: Array<{ level: string; fields: Record<string, unknown>; message: string }> = [];
+  const record = (level: string) => (fields: Record<string, unknown>, message: string) => {
+    lines.push({ level, fields, message });
+  };
+  return {
+    lines,
+    logger: { debug: record("debug"), info: record("info"), warn: record("warn") },
+    retained: () => lines.filter((line) => line.message === "Idle runtime retained"),
+  };
+}
+function scenario(enabled = true, idleMinutes?: number) {
+  const spy = spyLogger();
   const runtime = new Runtime();
   const runtimes = [runtime];
   let time = 0;
@@ -49,10 +64,11 @@ function scenario(enabled = true) {
   let tick!: () => void;
   const cleanup = createIdleRuntimeCleanup({
     enabled,
-    logger: createTestLogger(),
+    idleMinutes,
+    logger: spy.logger as never,
     now: () => time,
     runtimes: () => runtimes.filter((item) => !item.closed).map((item) => item.capture()),
-    isProtected: () => protectedCaller,
+    protection: () => (protectedCaller ? "caller is waiting" : null),
     schedule: (callback, interval) => {
       expect(interval).toBe(60_000);
       tick = callback;
@@ -63,6 +79,7 @@ function scenario(enabled = true) {
   return {
     runtime,
     runtimes,
+    spy,
     cleanup,
     tick: () => tick(),
     protect: (value: boolean) => {
@@ -291,4 +308,131 @@ test("disabling lets a started close finish but prevents the next closure in tha
   expect((await s.sweep(62)).collected).toEqual([
     { agentId: "sibling", provider: "test", sessionId: "sibling" },
   ]);
+});
+
+test("the idle period is configurable and a live change applies to the next sweep", async () => {
+  const s = scenario(true, 5);
+  expect((await s.sweep(4)).collected).toEqual([]);
+  expect((await s.sweep(5)).collected).toHaveLength(1);
+  const other = scenario(true);
+  other.cleanup.setIdleMinutes(30);
+  expect((await other.sweep(29)).collected).toEqual([]);
+  other.cleanup.setIdleMinutes(10);
+  expect((await other.sweep(30)).collected).toHaveLength(1);
+});
+
+test("a retained idle runtime is reported once per reason, with the check that blocked it", async () => {
+  const s = scenario();
+  s.runtime.busy = true;
+  await s.sweep(30);
+  expect(s.spy.retained()).toEqual([]);
+  expect(s.cleanup.retained()).toEqual([]);
+  await s.sweep(61);
+  await s.sweep(62);
+  expect(s.spy.retained()).toHaveLength(1);
+  expect(s.spy.retained()[0]!.fields).toMatchObject({
+    agentId: "agent",
+    reason: "agent lifecycle is running",
+    idleMinutes: 61,
+  });
+  expect(s.cleanup.retained()).toEqual([
+    expect.objectContaining({ agentId: "agent", reason: "agent lifecycle is running" }),
+  ]);
+  s.runtime.busy = false;
+  s.protect(true);
+  await s.sweep(63);
+  await s.sweep(64);
+  expect(s.spy.retained().map((line) => line.fields["reason"])).toEqual([
+    "agent lifecycle is running",
+    "caller is waiting",
+  ]);
+  s.protect(false);
+  await s.sweep(65);
+  expect(s.cleanup.retained()).toEqual([]);
+  expect(s.runtime.closed).toBe(false);
+});
+
+test.each([
+  ["a provider veto", async () => false, "provider reports work in progress (agent)", 0],
+  [
+    "a failing provider probe",
+    async () => {
+      throw new Error("Probe failed");
+    },
+    "runtime safety check failed: Probe failed",
+    1,
+  ],
+])("%s is reported as the retention reason", async (_name, probe, reason, failures) => {
+  const s = scenario();
+  s.runtime.probe = probe;
+  const result = await s.sweep(61);
+  expect(result.failures).toHaveLength(failures);
+  expect(s.spy.retained().map((line) => line.fields["reason"])).toEqual([reason]);
+});
+
+test("a descendant's blocker is reported against its parent by the descendant's id", async () => {
+  const s = scenario();
+  const child = new Runtime("child");
+  child.parentAgentId = s.runtime.id;
+  child.busy = true;
+  s.runtimes.push(child);
+  await s.sweep(61);
+  expect(s.cleanup.retained().map((entry) => [entry.agentId, entry.reason])).toEqual([
+    ["agent", "descendant child: agent lifecycle is running"],
+    ["child", "agent lifecycle is running"],
+  ]);
+});
+
+test("disabling the sweep forgets retention reasons", async () => {
+  const s = scenario();
+  s.runtime.busy = true;
+  await s.sweep(61);
+  expect(s.cleanup.retained()).toHaveLength(1);
+  s.cleanup.setEnabled(false);
+  expect(s.cleanup.retained()).toEqual([]);
+});
+
+test("closeNow releases an agent that is not yet idle for a period, even with the sweep disabled", async () => {
+  const s = scenario(false);
+  await s.sweep(1);
+  expect(await s.cleanup.closeNow("agent")).toEqual({ closed: true });
+  expect(s.runtime.closed).toBe(true);
+  expect(await s.cleanup.closeNow("agent")).toEqual({
+    closed: false,
+    reason: "the agent has no open runtime",
+  });
+});
+
+test.each([
+  [
+    "working",
+    (s: ReturnType<typeof scenario>) => (s.runtime.busy = true),
+    "agent lifecycle is running",
+  ],
+  ["waited on", (s: ReturnType<typeof scenario>) => s.protect(true), "caller is waiting"],
+  [
+    "vetoed by the provider",
+    (s: ReturnType<typeof scenario>) => (s.runtime.probe = async () => false),
+    "provider reports work in progress (agent)",
+  ],
+  [
+    "a descendant is working",
+    (s: ReturnType<typeof scenario>) => {
+      const child = new Runtime("child");
+      child.parentAgentId = s.runtime.id;
+      child.busy = true;
+      s.runtimes.push(child);
+    },
+    "descendant child: agent lifecycle is running",
+  ],
+  [
+    "without a saved session",
+    (s: ReturnType<typeof scenario>) => (s.runtime.resumable = false),
+    "the agent has no saved session to resume from",
+  ],
+])("closeNow refuses an agent that is %s", async (_name, arrange, reason) => {
+  const s = scenario();
+  arrange(s);
+  expect(await s.cleanup.closeNow("agent")).toEqual({ closed: false, reason });
+  expect(s.runtime.closed).toBe(false);
 });

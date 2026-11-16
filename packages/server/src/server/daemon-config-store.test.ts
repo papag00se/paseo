@@ -29,6 +29,7 @@ function reloadableConfig(
     autoArchiveAfterMerge: daemon.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: daemon.enableTerminalAgentHooks ?? false,
     idleRuntimeCleanup: agents.idleRuntimeCleanup !== false,
+    idleRuntimeCleanupMinutes: agents.idleRuntimeCleanupMinutes,
     appendSystemPrompt: daemon.appendSystemPrompt ?? "",
     terminalProfiles: daemon.terminalProfiles,
     agentProfiles: daemon.agentProfiles,
@@ -940,6 +941,10 @@ describe("DaemonConfigStore", () => {
 
     await store.patch({ idleRuntimeCleanup: true });
     expect(loadConfig(paseoHome, { env: {} }).idleRuntimeCleanup).toBe(true);
+
+    await store.patch({ idleRuntimeCleanupMinutes: 20 });
+    expect(loadPersistedConfig(paseoHome).agents?.idleRuntimeCleanupMinutes).toBe(20);
+    expect(loadConfig(paseoHome, { env: {} }).idleRuntimeCleanupMinutes).toBe(20);
   });
 
   test("patch persists custom ACP provider overrides into config.json", async () => {

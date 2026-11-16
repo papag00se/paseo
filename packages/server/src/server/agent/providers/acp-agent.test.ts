@@ -4536,7 +4536,7 @@ describe("ACP idle runtime cleanup", () => {
       provider: session.provider,
       sessionId: "permissive-session",
       lastActivityAt: 0,
-      isEligible: () => !closed,
+      retention: () => (closed ? "closed" : null),
       canStopRuntime: (session as AgentSession).canStopRuntime?.bind(session),
       async closeIfEligible(revalidate: () => boolean) {
         if (!revalidate()) return false;

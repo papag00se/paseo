@@ -425,7 +425,7 @@ test("remote finish intent protects its caller through registration, observation
     provider: "test",
     sessionId: "parent",
     lastActivityAt: 0,
-    isEligible: () => !collected,
+    retention: () => (collected ? "collected" : null),
     closeIfEligible: async (revalidate: () => boolean) => {
       if (!revalidate()) return false;
       collected = true;
@@ -437,7 +437,7 @@ test("remote finish intent protects its caller through registration, observation
     logger: createTestLogger(),
     now: () => time,
     runtimes: () => (collected ? [] : [runtime]),
-    isProtected: (agentId) => s.service.hasPendingForCaller(agentId),
+    protection: (agentId) => s.service.describePendingForCaller(agentId),
     schedule: () => () => {},
   });
   const savedPut = s.store.put.bind(s.store);
@@ -448,6 +448,9 @@ test("remote finish intent protects its caller through registration, observation
   };
   const registration = s.service.register({ ...intent, serverId: "remote" }, true);
   const protectedDuringRegistration = s.service.hasPendingForCaller?.("parent") ?? false;
+  expect(s.service.describePendingForCaller("parent")).toBe(
+    "a finish subscription is being registered",
+  );
   writing.resolve();
   const accepted = await registration;
   expect(protectedDuringRegistration).toBe(true);
@@ -456,6 +459,9 @@ test("remote finish intent protects its caller through registration, observation
   accepted.accept();
   await until(() => s.observation.waits.length === 1);
   expect(s.service.hasPendingForCaller("parent")).toBe(true);
+  expect(s.service.describePendingForCaller("parent")).toBe(
+    "pending finish subscription waiting on child",
+  );
   s.observation.waits[0]!.result.resolve(outcome());
   await until(() => s.delivery.prompts.length === 1);
   expect(s.service.hasPendingForCaller("parent")).toBe(true);
@@ -490,10 +496,14 @@ test("finish recovery protects callers before durable intent has loaded", async 
   });
   services.push(recovered);
   expect(recovered.hasPendingForCaller("parent")).toBe(true);
+  expect(recovered.describePendingForCaller("parent")).toBe(
+    "finish subscriptions are still recovering after daemon start",
+  );
   const starting = recovered.start();
   expect(recovered.hasPendingForCaller("parent")).toBe(true);
   loading.resolve();
   await starting;
   expect(recovered.hasPendingForCaller("parent")).toBe(true);
   expect(recovered.hasPendingForCaller("unrelated")).toBe(false);
+  expect(recovered.describePendingForCaller("unrelated")).toBeNull();
 });

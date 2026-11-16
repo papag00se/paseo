@@ -45,6 +45,8 @@ export interface AgentMessageDelivery {
   enqueue(message: Message): Receipt;
   /** Queued messages and provider dispatches still owned by this recipient. */
   hasPending(recipientId: string): boolean;
+  /** Why `hasPending` is true, or null: messages waiting to be sent, or sent and not yet acknowledged. */
+  describePending(recipientId: string): string | null;
   /** Stop admission, flush pending messages, and await provider dispatch acknowledgments. */
   close(): Promise<void>;
   /** Existing completion waits include agent messages admitted before the wait. */
@@ -141,6 +143,13 @@ export function createAgentMessageDelivery(dependencies: Dependencies): AgentMes
 
   return {
     hasPending: (recipientId) => pending.has(recipientId) || dispatching.has(recipientId),
+    describePending(recipientId) {
+      if (pending.has(recipientId)) return "agent messages are queued for delivery";
+      if (dispatching.has(recipientId)) {
+        return "an agent message was sent and the provider has not acknowledged it";
+      }
+      return null;
+    },
     enqueue(message) {
       if (closed) throw new Error("Agent message delivery is closed");
       let resolve!: Admitted["resolve"];

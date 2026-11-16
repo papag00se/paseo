@@ -349,7 +349,7 @@ working managed/native descendants, and outstanding local or remote finish subsc
 caller. Subscription protection lasts through registration, recovery and notification dispatch
 acknowledgment. A positive provider response never overrides these blockers. Paseo rechecks
 activity before the existing `session.close` operation. After protected work finishes, a fresh
-one-hour idle period starts. The saved provider persistence must resume the same conversation.
+idle period (one hour by default) starts. The saved provider persistence must resume the same conversation.
 The host setting `agents.idleRuntimeCleanup: false` disables collection for every provider.
 
 ## Publish timeline items

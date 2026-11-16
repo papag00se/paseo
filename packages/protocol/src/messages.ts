@@ -237,6 +237,8 @@ export const MutableDaemonConfigSchema = z
     // COMPAT(idleRuntimeCleanupSetting): added in v0.13.0, keep optional while old daemons are supported.
     // Persisted host-wide value, applied live by the daemon.
     idleRuntimeCleanup: z.boolean().optional(),
+    // Minutes an agent stays idle before its runtime is released; the daemon uses 60 when unset.
+    idleRuntimeCleanupMinutes: z.number().int().min(5).optional(),
     appendSystemPrompt: z.string().default(""),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
@@ -262,6 +264,7 @@ export const MutableDaemonConfigPatchSchema = z
     autoArchiveAfterMerge: z.boolean().optional(),
     enableTerminalAgentHooks: z.boolean().optional(),
     idleRuntimeCleanup: z.boolean().optional(),
+    idleRuntimeCleanupMinutes: z.number().int().min(5).optional(),
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
@@ -866,6 +869,26 @@ export const AgentMomentumHistoryEntrySchema = AgentMomentumSnapshotSchema.exten
   title: z.string().nullable(),
 });
 export type AgentMomentumHistoryEntry = z.infer<typeof AgentMomentumHistoryEntrySchema>;
+
+/**
+ * What a project has been doing and what likely comes next, written when a hand-started agent
+ * leaves (archived or deleted). It does not depend on any live agent.
+ */
+export const ProjectMomentumSchema = z.object({
+  projectId: z.string(),
+  /** Latest activity in the project, at most 50 words. */
+  latest: z.string(),
+  /** Likely next steps, at most 50 words. */
+  next: z.string(),
+  generatedAt: z.string(),
+  /** The departing agent the summary was written from. */
+  agentId: z.string(),
+  agentTitle: z.string().nullable(),
+  /** The provider and model that wrote it, or null for a summary seeded from agent summaries. */
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+});
+export type ProjectMomentum = z.infer<typeof ProjectMomentumSchema>;
 
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
@@ -2091,6 +2114,46 @@ export const AgentDetachRequestMessageSchema = z.object({
 export const AgentDetachResponseMessageSchema = z.object({
   type: z.literal("agent.detach.response"),
   payload: AgentActionResponsePayloadSchema,
+});
+
+export const AgentRuntimeCloseRequestMessageSchema = z.object({
+  type: z.literal("agent.runtime.close.request"),
+  agentId: z.string(),
+  requestId: z.string(),
+});
+
+// A refused close is a normal answer: `closed` is false and `reason` says what still holds the runtime.
+export const AgentRuntimeCloseResponseMessageSchema = z.object({
+  type: z.literal("agent.runtime.close.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    closed: z.boolean(),
+    reason: z.string().nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const AgentRuntimeRetentionRequestMessageSchema = z.object({
+  type: z.literal("agent.runtime.get_retention.request"),
+  requestId: z.string(),
+});
+
+export const AgentRuntimeRetentionResponseMessageSchema = z.object({
+  type: z.literal("agent.runtime.get_retention.response"),
+  payload: z.object({
+    requestId: z.string(),
+    retained: z.array(
+      z.object({
+        agentId: z.string(),
+        provider: z.string(),
+        reason: z.string(),
+        lastActivityAt: z.string(),
+        since: z.string(),
+      }),
+    ),
+    error: z.string().nullable(),
+  }),
 });
 
 export const AgentRewindModeSchema = z.enum(["conversation", "files", "both"]);
@@ -3401,6 +3464,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentFeatureRequestMessageSchema,
   AgentConfigApplyRequestMessageSchema,
   AgentDetachRequestMessageSchema,
+  AgentRuntimeCloseRequestMessageSchema,
+  AgentRuntimeRetentionRequestMessageSchema,
   AgentRewindRequestMessageSchema,
   AgentPermissionResponseMessageSchema,
   CheckoutStatusRequestSchema,
@@ -3760,6 +3825,8 @@ export const ServerInfoStatusPayloadSchema = z
         skillManagement: z.boolean().optional(),
         // COMPAT(idleRuntimeCleanupSetting): added in v0.13.0, remove gate after 2027-04-26.
         idleRuntimeCleanupSetting: z.boolean().optional(),
+        // Fork feature: agent.runtime.close and agent.runtime.get_retention RPCs.
+        agentRuntimeClose: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.
@@ -4830,6 +4897,8 @@ export const MomentumHistoryResponseMessageSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     entries: z.array(AgentMomentumHistoryEntrySchema),
+    // Fork: optional so older clients and daemons keep parsing each other's messages.
+    project: ProjectMomentumSchema.nullable().optional(),
     error: z.string().nullable(),
   }),
 });
@@ -7145,6 +7214,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentFeatureResponseMessageSchema,
   AgentConfigApplyResponseMessageSchema,
   AgentDetachResponseMessageSchema,
+  AgentRuntimeCloseResponseMessageSchema,
+  AgentRuntimeRetentionResponseMessageSchema,
   AgentRewindResponseMessageSchema,
   UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,
@@ -7350,6 +7421,12 @@ export type SetAgentThinkingResponseMessage = z.infer<typeof SetAgentThinkingRes
 export type SetAgentFeatureResponseMessage = z.infer<typeof SetAgentFeatureResponseMessageSchema>;
 export type AgentConfigApplyResponseMessage = z.infer<typeof AgentConfigApplyResponseMessageSchema>;
 export type AgentDetachResponseMessage = z.infer<typeof AgentDetachResponseMessageSchema>;
+export type AgentRuntimeCloseResponseMessage = z.infer<
+  typeof AgentRuntimeCloseResponseMessageSchema
+>;
+export type AgentRuntimeRetentionResponseMessage = z.infer<
+  typeof AgentRuntimeRetentionResponseMessageSchema
+>;
 export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessageSchema>;
 export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
 export type ProjectRenameResponse = z.infer<typeof ProjectRenameResponseSchema>;
@@ -7519,6 +7596,10 @@ export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequ
 export type SetAgentFeatureRequestMessage = z.infer<typeof SetAgentFeatureRequestMessageSchema>;
 export type AgentConfigApplyRequestMessage = z.infer<typeof AgentConfigApplyRequestMessageSchema>;
 export type AgentDetachRequestMessage = z.infer<typeof AgentDetachRequestMessageSchema>;
+export type AgentRuntimeCloseRequestMessage = z.infer<typeof AgentRuntimeCloseRequestMessageSchema>;
+export type AgentRuntimeRetentionRequestMessage = z.infer<
+  typeof AgentRuntimeRetentionRequestMessageSchema
+>;
 export type AgentPermissionResponseMessage = z.infer<typeof AgentPermissionResponseMessageSchema>;
 export type CheckoutStatusRequest = z.infer<typeof CheckoutStatusRequestSchema>;
 export type CheckoutStatusResponse = z.infer<typeof CheckoutStatusResponseSchema>;

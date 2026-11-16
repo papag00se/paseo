@@ -293,6 +293,23 @@ export type AgentAttentionCallback = (params: {
 
 export type AgentArchivedCallback = (agentId: string) => Promise<void> | void;
 
+/** One conversation turn kept for summarizing an agent that is leaving. */
+export interface DepartureMessage {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/** An agent about to be archived or deleted, captured while its conversation can still be read. */
+export interface AgentDeparture {
+  record: StoredAgentRecord;
+  reason: "archived" | "deleted";
+  /** The latest user and assistant messages, oldest first. */
+  transcript: DepartureMessage[];
+}
+export type AgentDepartureCallback = (departure: AgentDeparture) => void;
+
+const DEPARTURE_TRANSCRIPT_ITEMS = 120;
+
 export interface ProviderAvailability {
   provider: AgentProvider;
   available: boolean;
@@ -790,6 +807,7 @@ export class AgentManager {
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
+  private onAgentDeparting?: AgentDepartureCallback;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
@@ -885,6 +903,44 @@ export class AgentManager {
 
   setAgentArchivedCallback(callback: AgentArchivedCallback): void {
     this.onAgentArchived = callback;
+  }
+
+  /** Called, without waiting for it, when a non-internal agent is archived or deleted. */
+  setAgentDepartingCallback(callback: AgentDepartureCallback): void {
+    this.onAgentDeparting = callback;
+  }
+
+  /**
+   * Hands a leaving agent's conversation tail to the departing callback. Archive calls it itself;
+   * delete calls it before removing the agent, and skips agents archived earlier because their
+   * departure was already announced.
+   */
+  async announceDeparture(agentId: string, reason: AgentDeparture["reason"]): Promise<void> {
+    const callback = this.onAgentDeparting;
+    if (!callback || !this.registry) return;
+    try {
+      const record = await this.registry.get(agentId);
+      if (!record || record.internal || (reason === "deleted" && record.archivedAt)) return;
+      callback({ record, reason, transcript: await this.readDepartureTranscript(agentId) });
+    } catch (error) {
+      this.logger.warn({ err: error, agentId }, "Failed to announce agent departure");
+    }
+  }
+
+  private async readDepartureTranscript(agentId: string): Promise<DepartureMessage[]> {
+    const items = this.timelineStore.has(agentId)
+      ? this.timelineStore.getItems(agentId)
+      : ((
+          await this.durableTimelineStore?.fetchCommitted(agentId, {
+            direction: "tail",
+            limit: DEPARTURE_TRANSCRIPT_ITEMS,
+          })
+        )?.rows.map((row) => row.item) ?? []);
+    return items.flatMap((item): DepartureMessage[] =>
+      item.type === "user_message" || item.type === "assistant_message"
+        ? [{ role: item.type === "user_message" ? "user" : "assistant", text: item.text }]
+        : [],
+    );
   }
 
   setMcpBaseUrl(url: string | null): void {
@@ -1864,10 +1920,10 @@ export class AgentManager {
         identity = Object.freeze({});
         this.runtimeCleanupIdentities.set(agent.session, identity);
       }
-      const isEligible = () =>
-        this.agents.get(agent.id) === agent &&
-        agent.updatedAt === updatedAt &&
-        this.runtimeHasNoPendingWork(agent);
+      const retention = () =>
+        this.agents.get(agent.id) !== agent || agent.updatedAt !== updatedAt
+          ? "the agent was active again or replaced"
+          : this.runtimeRetentionReason(agent);
       candidates.push({
         identity,
         agentId: agent.id,
@@ -1875,7 +1931,7 @@ export class AgentManager {
         provider: agent.provider,
         sessionId: agent.persistence?.sessionId ?? null,
         lastActivityAt: updatedAt.getTime(),
-        isEligible,
+        retention,
         canStopRuntime: agent.session.canStopRuntime?.bind(agent.session),
         closeIfEligible: async (revalidate) => {
           if (!agent.persistence?.sessionId) return false;
@@ -1884,7 +1940,7 @@ export class AgentManager {
           this.collectingRuntimes.add(agent.id);
           try {
             return await this.runLifecycleMutation(agent.id, () =>
-              this.closeAgentRuntime(agent.id, () => isEligible() && revalidate()),
+              this.closeAgentRuntime(agent.id, () => retention() === null && revalidate()),
             );
           } finally {
             this.collectingRuntimes.delete(agent.id);
@@ -1895,20 +1951,26 @@ export class AgentManager {
     return candidates;
   }
 
-  private runtimeHasNoPendingWork(agent: LiveManagedAgent): boolean {
-    return (
-      agent.lifecycle === "idle" &&
-      !agent.internal &&
-      agent.activeForegroundTurnId === null &&
-      !this.runs.hasRun(agent.id) &&
-      !agent.pendingReplacement &&
-      agent.pendingPermissions.size === 0 &&
-      agent.inFlightPermissionResponses.size === 0 &&
-      (this.collectingRuntimes.has(agent.id) || !this.lifecycleMutationTails.has(agent.id)) &&
-      !this.foregroundMutationTails.has(agent.id) &&
-      !this.sessionEventTails.has(agent.id) &&
-      !this.providerSubagents.list(agent.id).some((child) => child.status === "running")
-    );
+  /** Why this agent's runtime cannot be released right now, or null when no work is pending. */
+  private runtimeRetentionReason(agent: LiveManagedAgent): string | null {
+    if (agent.internal) return "internal agent";
+    if (agent.lifecycle !== "idle") return `agent lifecycle is ${agent.lifecycle}`;
+    if (agent.activeForegroundTurnId !== null || this.runs.hasRun(agent.id)) {
+      return "a turn is running";
+    }
+    if (agent.pendingReplacement) return "a prompt replacement is pending";
+    if (agent.pendingPermissions.size > 0 || agent.inFlightPermissionResponses.size > 0) {
+      return "a permission request is pending";
+    }
+    if (!this.collectingRuntimes.has(agent.id) && this.lifecycleMutationTails.has(agent.id)) {
+      return "a lifecycle operation (reload, archive, close, rename) is in flight";
+    }
+    if (this.foregroundMutationTails.has(agent.id)) return "a prompt is being admitted";
+    if (this.sessionEventTails.has(agent.id)) return "provider events are still being processed";
+    const subagent = this.providerSubagents
+      .list(agent.id)
+      .find((child) => child.status === "running");
+    return subagent ? `provider subagent ${subagent.id} is running` : null;
   }
 
   closeAgent(agentId: string): Promise<void> {
@@ -2123,6 +2185,8 @@ export class AgentManager {
     options: { archivedAt: string; updatedAt?: string },
   ): Promise<ArchivedStoredAgentRecord> {
     const archivedRecord = buildArchivedAgentRecord(record, options);
+    // Read the conversation before the archive closes the runtime and drops retained state.
+    if (!record.archivedAt) await this.announceDeparture(record.id, "archived");
     await this.requireRegistry().upsert(archivedRecord);
     if (!record.archivedAt && !record.internal) {
       this.pluginLifecycle?.emit("agent.archived", {

@@ -113,6 +113,18 @@ const remove = defineRpc({
   output: z.object({}),
 });
 
+const closeRuntime = defineRpc({
+  name: "close-runtime",
+  input: z.object({ agentId: z.string() }),
+  output: z.object({ closed: z.boolean(), reason: z.string().optional() }),
+});
+
+const retained = defineRpc({
+  name: "retained",
+  input: z.object({}),
+  output: z.object({ agentIds: z.array(z.string()) }),
+});
+
 const append = defineRpc({
   name: "append",
   input: z.object({ agentId: z.string(), status: z.string() }),
@@ -141,6 +153,10 @@ export default function contribute(server: PluginServerContext) {
     await entryPaseo.agents.ref(agentId).delete();
     return {};
   });
+  server.handle(closeRuntime, ({ agentId }) => entryPaseo.agents.ref(agentId).close());
+  server.handle(retained, async () => ({
+    agentIds: (await entryPaseo.agents.retainedRuntimes()).map((entry) => entry.agentId),
+  }));
   server.handle(append, ({ agentId, status }, { paseo }) =>
     paseo.agents.ref(agentId).timeline.append({
       type: "plugin",
@@ -207,6 +223,23 @@ export default function contribute(server: PluginServerContext) {
         }),
       }),
     ]);
+    // A plugin can release an idle agent's runtime; the agent stays and resumes later.
+    await client.waitForFinish(agentId, 10_000);
+    await expect(client.invokePluginRpc("paseo-api", "retained", {})).resolves.toEqual({
+      agentIds: [],
+    });
+    await expect(
+      client.invokePluginRpc("paseo-api", "close-runtime", { agentId }),
+    ).resolves.toEqual({
+      closed: true,
+    });
+    expect((await client.fetchAgent({ agentId }))?.agent.status).toBe("closed");
+    await expect(
+      client.invokePluginRpc("paseo-api", "close-runtime", { agentId }),
+    ).resolves.toEqual({
+      closed: false,
+      reason: "the agent has no open runtime",
+    });
     await client.removePlugin("paseo-api");
     const workspaces = await client.fetchWorkspaces();
     const agents = await client.fetchAgents();

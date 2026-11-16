@@ -95,7 +95,10 @@ for the entire host by turning off **Release idle agents** in **Settings → you
 ```
 
 This setting defaults to `true`. Changes in Settings apply immediately; config-file edits apply
-on config reload. Re-enabling keeps existing idle timestamps. There is no per-agent setting. Providers without a runtime safety check use the same daemon baseline and one-hour idle
+on config reload. Re-enabling keeps existing idle timestamps. The idle period is one hour; change it
+with `{ "agents": { "idleRuntimeCleanupMinutes": 30 } }` (whole minutes, at least 5). It also applies
+on config reload. The daemon log names the check that keeps an agent open once it has been idle for
+a full period. There is no per-agent setting. Providers without a runtime safety check use the same daemon baseline and one-hour idle
 period. Active work, descendants and pending finish notifications prevent cleanup. ACP adapters
 also retain runtimes with running ACP terminals, including silent ones; exited terminals do not
 prevent cleanup. This check does not inspect processes launched internally by the provider.

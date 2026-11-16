@@ -337,6 +337,7 @@ interface SessionForTestOptions {
   pluginRuntime?: SessionOptions["pluginRuntime"];
   orchestrationSkills?: SessionOptions["orchestrationSkills"];
   workspaceLabelService?: WorkspaceLabelService;
+  idleRuntimes?: SessionOptions["idleRuntimes"];
 }
 
 function createSessionForTest(options: SessionForTestOptions = {}): Session {
@@ -433,6 +434,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
     }),
     pluginRuntime: options.pluginRuntime,
     orchestrationSkills: options.orchestrationSkills,
+    idleRuntimes: options.idleRuntimes,
     stt: options.stt ?? null,
     tts: null,
     terminalManager: options.terminalManager ?? null,
@@ -1618,6 +1620,92 @@ describe("agent detach RPC", () => {
         requestId: "detach-1",
         agentId: "child-agent",
         accepted: true,
+        error: null,
+      },
+    });
+  });
+});
+
+describe("agent runtime RPCs", () => {
+  async function ask(
+    idleRuntimes: SessionOptions["idleRuntimes"],
+    message:
+      | { type: "agent.runtime.close.request"; agentId: string }
+      | { type: "agent.runtime.get_retention.request" },
+  ) {
+    const messages: unknown[] = [];
+    const session = createSessionForTest({ messages, idleRuntimes });
+    await session.handleMessage({ ...message, requestId: "r1" });
+    return messages;
+  }
+
+  test.each([
+    [{ closed: true } as const, { closed: true, reason: null, error: null }],
+    [
+      { closed: false, reason: "a turn is running" } as const,
+      { closed: false, reason: "a turn is running", error: null },
+    ],
+  ])("close answers %j without throwing", async (result, expected) => {
+    const closeNow = vi.fn().mockResolvedValue(result);
+    const messages = await ask(
+      { closeNow, retained: () => [] },
+      { type: "agent.runtime.close.request", agentId: "a1" },
+    );
+    expect(closeNow).toHaveBeenCalledWith("a1");
+    expect(messages).toContainEqual({
+      type: "agent.runtime.close.response",
+      payload: { requestId: "r1", agentId: "a1", ...expected },
+    });
+  });
+
+  test("close reports an unexpected failure and a daemon without idle runtime control", async () => {
+    const failing = await ask(
+      { closeNow: vi.fn().mockRejectedValue(new Error("boom")), retained: () => [] },
+      { type: "agent.runtime.close.request", agentId: "a1" },
+    );
+    expect(failing).toContainEqual({
+      type: "agent.runtime.close.response",
+      payload: { requestId: "r1", agentId: "a1", closed: false, reason: null, error: "boom" },
+    });
+    const missing = await ask(undefined, { type: "agent.runtime.close.request", agentId: "a1" });
+    expect(missing).toContainEqual({
+      type: "agent.runtime.close.response",
+      payload: expect.objectContaining({
+        closed: false,
+        error: expect.stringContaining("idle runtimes"),
+      }),
+    });
+  });
+
+  test("retention lists the held-back runtimes with ISO timestamps", async () => {
+    const messages = await ask(
+      {
+        closeNow: vi.fn(),
+        retained: () => [
+          {
+            agentId: "a1",
+            provider: "pi",
+            reason: "a turn is running",
+            lastActivityAt: 0,
+            since: 60_000,
+          },
+        ],
+      },
+      { type: "agent.runtime.get_retention.request" },
+    );
+    expect(messages).toContainEqual({
+      type: "agent.runtime.get_retention.response",
+      payload: {
+        requestId: "r1",
+        retained: [
+          {
+            agentId: "a1",
+            provider: "pi",
+            reason: "a turn is running",
+            lastActivityAt: "1970-01-01T00:00:00.000Z",
+            since: "1970-01-01T00:01:00.000Z",
+          },
+        ],
         error: null,
       },
     });

@@ -23,7 +23,7 @@ import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@getpaseo/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@getpaseo/protocol/messages";
-import type { AgentMomentumHistoryEntry } from "@getpaseo/protocol/messages";
+import type { AgentMomentumHistoryEntry, ProjectMomentum } from "@getpaseo/protocol/messages";
 import type { LocalSpeechModel } from "@getpaseo/protocol/speech/rpc-schemas";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@getpaseo/protocol/agent-attention-notification";
@@ -3331,6 +3331,36 @@ export class DaemonClient {
     }
   }
 
+  /**
+   * Releases an idle agent's provider runtime and keeps the agent resumable. The daemon refuses while
+   * the agent or one of its subagents is working or waited on; a refusal returns `closed: false` and
+   * the reason, it does not throw.
+   */
+  async closeAgentRuntime(
+    agentId: string,
+  ): Promise<{ closed: true } | { closed: false; reason: string }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.runtime.close.response">({
+        message: { type: "agent.runtime.close.request", agentId },
+      });
+    if (payload.error) throw new Error(payload.error);
+    return payload.closed
+      ? { closed: true }
+      : { closed: false, reason: payload.reason ?? "refused" };
+  }
+
+  /** Idle agents whose runtimes the daemon's idle cleanup refuses to release, with the reason for each. */
+  async getAgentRuntimeRetention(): Promise<
+    CorrelatedResponsePayload<"agent.runtime.get_retention.response">["retained"]
+  > {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.runtime.get_retention.response">({
+        message: { type: "agent.runtime.get_retention.request" },
+      });
+    if (payload.error) throw new Error(payload.error);
+    return payload.retained;
+  }
+
   async updateAgent(
     agentId: string,
     updates: { name?: string; labels?: Record<string, string> },
@@ -3638,8 +3668,13 @@ export class DaemonClient {
     return { seq: payload.seq, epoch: payload.epoch };
   }
 
-  /** Persisted Momentum summaries for a workspace, including agents that were since deleted. */
-  async fetchMomentumHistory(workspaceId: string): Promise<AgentMomentumHistoryEntry[]> {
+  /**
+   * Persisted Momentum for a workspace: per-agent summaries, including agents since deleted, and
+   * its project's summary, which outlives every agent.
+   */
+  async fetchMomentum(
+    workspaceId: string,
+  ): Promise<{ entries: AgentMomentumHistoryEntry[]; project: ProjectMomentum | null }> {
     const requestId = this.createRequestId();
     const payload = await this.sendCorrelatedSessionRequest({
       requestId,
@@ -3647,7 +3682,7 @@ export class DaemonClient {
       responseType: "momentum.history.response",
     });
     if (payload.error) throw new Error(payload.error);
-    return payload.entries;
+    return { entries: payload.entries, project: payload.project ?? null };
   }
 
   async searchAgentTimeline({
