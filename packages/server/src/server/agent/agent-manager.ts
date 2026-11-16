@@ -293,6 +293,23 @@ export type AgentAttentionCallback = (params: {
 
 export type AgentArchivedCallback = (agentId: string) => Promise<void> | void;
 
+/** One conversation turn kept for summarizing an agent that is leaving. */
+export interface DepartureMessage {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/** An agent about to be archived or deleted, captured while its conversation can still be read. */
+export interface AgentDeparture {
+  record: StoredAgentRecord;
+  reason: "archived" | "deleted";
+  /** The latest user and assistant messages, oldest first. */
+  transcript: DepartureMessage[];
+}
+export type AgentDepartureCallback = (departure: AgentDeparture) => void;
+
+const DEPARTURE_TRANSCRIPT_ITEMS = 120;
+
 export interface ProviderAvailability {
   provider: AgentProvider;
   available: boolean;
@@ -790,6 +807,7 @@ export class AgentManager {
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
+  private onAgentDeparting?: AgentDepartureCallback;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
@@ -885,6 +903,44 @@ export class AgentManager {
 
   setAgentArchivedCallback(callback: AgentArchivedCallback): void {
     this.onAgentArchived = callback;
+  }
+
+  /** Called, without waiting for it, when a non-internal agent is archived or deleted. */
+  setAgentDepartingCallback(callback: AgentDepartureCallback): void {
+    this.onAgentDeparting = callback;
+  }
+
+  /**
+   * Hands a leaving agent's conversation tail to the departing callback. Archive calls it itself;
+   * delete calls it before removing the agent, and skips agents archived earlier because their
+   * departure was already announced.
+   */
+  async announceDeparture(agentId: string, reason: AgentDeparture["reason"]): Promise<void> {
+    const callback = this.onAgentDeparting;
+    if (!callback || !this.registry) return;
+    try {
+      const record = await this.registry.get(agentId);
+      if (!record || record.internal || (reason === "deleted" && record.archivedAt)) return;
+      callback({ record, reason, transcript: await this.readDepartureTranscript(agentId) });
+    } catch (error) {
+      this.logger.warn({ err: error, agentId }, "Failed to announce agent departure");
+    }
+  }
+
+  private async readDepartureTranscript(agentId: string): Promise<DepartureMessage[]> {
+    const items = this.timelineStore.has(agentId)
+      ? this.timelineStore.getItems(agentId)
+      : ((
+          await this.durableTimelineStore?.fetchCommitted(agentId, {
+            direction: "tail",
+            limit: DEPARTURE_TRANSCRIPT_ITEMS,
+          })
+        )?.rows.map((row) => row.item) ?? []);
+    return items.flatMap((item): DepartureMessage[] =>
+      item.type === "user_message" || item.type === "assistant_message"
+        ? [{ role: item.type === "user_message" ? "user" : "assistant", text: item.text }]
+        : [],
+    );
   }
 
   setMcpBaseUrl(url: string | null): void {
@@ -2129,6 +2185,8 @@ export class AgentManager {
     options: { archivedAt: string; updatedAt?: string },
   ): Promise<ArchivedStoredAgentRecord> {
     const archivedRecord = buildArchivedAgentRecord(record, options);
+    // Read the conversation before the archive closes the runtime and drops retained state.
+    if (!record.archivedAt) await this.announceDeparture(record.id, "archived");
     await this.requireRegistry().upsert(archivedRecord);
     if (!record.archivedAt && !record.internal) {
       this.pluginLifecycle?.emit("agent.archived", {

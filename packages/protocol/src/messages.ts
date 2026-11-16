@@ -870,6 +870,26 @@ export const AgentMomentumHistoryEntrySchema = AgentMomentumSnapshotSchema.exten
 });
 export type AgentMomentumHistoryEntry = z.infer<typeof AgentMomentumHistoryEntrySchema>;
 
+/**
+ * What a project has been doing and what likely comes next, written when a hand-started agent
+ * leaves (archived or deleted). It does not depend on any live agent.
+ */
+export const ProjectMomentumSchema = z.object({
+  projectId: z.string(),
+  /** Latest activity in the project, at most 50 words. */
+  latest: z.string(),
+  /** Likely next steps, at most 50 words. */
+  next: z.string(),
+  generatedAt: z.string(),
+  /** The departing agent the summary was written from. */
+  agentId: z.string(),
+  agentTitle: z.string().nullable(),
+  /** The provider and model that wrote it, or null for a summary seeded from agent summaries. */
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+});
+export type ProjectMomentum = z.infer<typeof ProjectMomentumSchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -4877,6 +4897,8 @@ export const MomentumHistoryResponseMessageSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     entries: z.array(AgentMomentumHistoryEntrySchema),
+    // Fork: optional so older clients and daemons keep parsing each other's messages.
+    project: ProjectMomentumSchema.nullable().optional(),
     error: z.string().nullable(),
   }),
 });

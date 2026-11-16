@@ -157,9 +157,9 @@ function WorkspaceMomentum({
   // their last summary and next step.
   const history = useFetchQuery({
     queryKey: ["momentum-history", workspace.serverId, workspace.workspaceId],
-    queryFn: () => client!.fetchMomentumHistory(workspace.workspaceId),
+    queryFn: () => client!.fetchMomentum(workspace.workspaceId),
     enabled: !!client,
-    dataShape: "list",
+    dataShape: "value",
     staleTimeMs: 0,
   });
   const refetchHistory = history.refetch;
@@ -182,17 +182,27 @@ function WorkspaceMomentum({
     // Any cached agent without a live summary shows its last cached one: deleted agents, archived
     // ones, and agents whose records haven't replicated yet.
     const live = new Set(summaries.map((agent) => agent.id));
-    return (history.data ?? [])
+    // A project summary already covers sessions that ended, so listing them again is noise.
+    if (history.data?.project) return [];
+    return (history.data?.entries ?? [])
       .filter((entry) => !live.has(entry.agentId))
       .slice(0, EARLIER_SESSION_LIMIT);
   }, [history.data, summaries]);
+  const project = history.data?.project ?? null;
 
   // Always expose Momentum. Agent records are replicated lazily, so hiding this
   // section until the replica arrives made the feature appear nonexistent.
   return (
     <>
       <View style={styles.separator} />
-      {summaries.length === 0 && earlier.length === 0 ? (
+      {project ? (
+        <View style={styles.momentumBlock} testID="workspace-momentum-project">
+          <Text style={styles.momentumAgent}>Project</Text>
+          <Text style={styles.momentumText}>{project.latest}</Text>
+          <Text style={styles.momentumNext}>Likely next: {project.next}</Text>
+        </View>
+      ) : null}
+      {!project && summaries.length === 0 && earlier.length === 0 ? (
         <View style={styles.momentumBlock} testID="workspace-momentum-pending">
           <Text style={styles.momentumAgent}>Momentum</Text>
           <Text style={styles.momentumText}>
@@ -202,7 +212,7 @@ function WorkspaceMomentum({
           </Text>
         </View>
       ) : null}
-      {summaries.length > 0 || earlier.length > 0 ? (
+      {summaries.length > 0 || earlier.length > 0 || project ? (
         <Pressable accessibilityRole="button" onPress={refreshMomentum}>
           <Text style={styles.momentumNext}>Refresh</Text>
         </Pressable>

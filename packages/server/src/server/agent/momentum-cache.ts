@@ -62,6 +62,11 @@ export class MomentumCache {
     return this.loading;
   }
 
+  /** Every cached per-agent summary. */
+  async all(): Promise<AgentMomentumHistoryEntry[]> {
+    return [...(await this.load()).values()];
+  }
+
   /** Records summaries, keeping whichever copy of each agent's summary is newest. */
   async record(
     updates: readonly AgentMomentumHistoryEntry[],

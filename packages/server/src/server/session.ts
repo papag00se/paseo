@@ -140,6 +140,7 @@ import {
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
 import { readMomentumHistory } from "./agent/momentum-cache.js";
+import { readProjectMomentum } from "./agent/project-momentum-cache.js";
 import {
   ImportSessionsRequestError,
   importProviderSession,
@@ -3333,6 +3334,8 @@ export class Session {
       this.agentManager.getAgent(agentId)?.workspaceId ??
       (await this.agentStorage.get(agentId))?.workspaceId ??
       null;
+
+    await this.agentManager.announceDeparture(agentId, "deleted");
 
     // File-backed storage still needs an early delete fence before closeAgent().
     beginAgentDeleteIfSupported(this.agentStorage, agentId);
@@ -8013,14 +8016,20 @@ export class Session {
     source?: object,
   ): Promise<void> {
     let entries: Awaited<ReturnType<typeof readMomentumHistory>> = [];
+    let project: Awaited<ReturnType<typeof readProjectMomentum>> = null;
     let error: string | null = null;
     try {
       entries = await readMomentumHistory(this.paseoHome, msg.workspaceId);
+      const projectId = (await this.workspaceRegistry.get(msg.workspaceId))?.projectId;
+      if (projectId) project = await readProjectMomentum(this.paseoHome, projectId);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause);
     }
     this.emitForSource(
-      { type: "momentum.history.response", payload: { requestId: msg.requestId, entries, error } },
+      {
+        type: "momentum.history.response",
+        payload: { requestId: msg.requestId, entries, project, error },
+      },
       source,
     );
   }

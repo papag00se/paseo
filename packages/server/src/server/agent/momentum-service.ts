@@ -4,10 +4,16 @@ import { z } from "zod";
 import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
 import { isDelegatedAgent } from "@getpaseo/protocol/agent-labels";
 import {
+  generateStructuredAgentResponse,
   generateStructuredAgentResponseWithFallback,
   type StructuredGenerationLogger,
 } from "./agent-response-loop.js";
-import { type AgentManager, type ManagedAgent } from "./agent-manager.js";
+import {
+  type AgentDeparture,
+  type AgentManager,
+  type DepartureMessage,
+  type ManagedAgent,
+} from "./agent-manager.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
 import type { AgentStorage } from "./agent-storage.js";
 import {
@@ -16,6 +22,8 @@ import {
 } from "./structured-generation-providers.js";
 import type { ProviderSnapshotManager } from "./provider-snapshot-manager.js";
 import { MomentumCache } from "./momentum-cache.js";
+import { ProjectMomentumCache } from "./project-momentum-cache.js";
+import type { ProjectMomentum } from "@getpaseo/protocol/messages";
 
 const MOMENTUM_SCHEMA = z.object({
   focus: z.string().trim().min(1).max(220),
@@ -24,6 +32,14 @@ const MOMENTUM_SCHEMA = z.object({
 });
 
 const MAX_CONTEXT_CHARS = 6_000;
+/** The project summary is written by the departing agent's own model, so it can read more. */
+const PROJECT_CONTEXT_CHARS = 24_000;
+const PROJECT_CONTEXT_MESSAGES = 16;
+const PROJECT_SUMMARY_WORDS = 50;
+const PROJECT_SUMMARY_SCHEMA = z.object({
+  latest: z.string().trim().min(1).max(600),
+  next: z.string().trim().min(1).max(600),
+});
 const STARTUP_LIMIT = 25;
 const RECENT_ACTIVITY_MS = 30 * 24 * 60 * 60 * 1_000;
 const DEFAULT_MOMENTUM_PROVIDERS = [
@@ -36,6 +52,8 @@ export class MomentumService {
   private readonly running = new Set<string>();
   private unsubscribe: (() => void) | null = null;
   private readonly cache: MomentumCache;
+  private readonly projectCache: ProjectMomentumCache;
+  private readonly projectQueues = new Map<string, Promise<void>>();
 
   constructor(
     private readonly deps: {
@@ -45,9 +63,150 @@ export class MomentumService {
       readDaemonConfig: () => StructuredGenerationDaemonConfig;
       logger: StructuredGenerationLogger & Logger;
       paseoHome: string;
+      /** The project a workspace belongs to; null when the workspace is unknown. */
+      resolveProjectId?: (workspaceId: string) => Promise<string | null>;
+      /** Test seam: replaces the call that runs one structured generation. */
+      runner?: typeof generateStructuredAgentResponse;
     },
   ) {
     this.cache = new MomentumCache(deps.paseoHome);
+    this.projectCache = new ProjectMomentumCache(deps.paseoHome);
+  }
+
+  /**
+   * Summarizes a project when a hand-started agent in it is archived or deleted. The summary is
+   * written by that agent's own provider and model, because a cheaper model can misread a long
+   * session. Writes for one project run one at a time so each builds on the previous summary.
+   */
+  onDeparting(departure: AgentDeparture): void {
+    const { record } = departure;
+    if (record.internal || isDelegatedAgent(record) || !record.workspaceId) return;
+    const workspaceId = record.workspaceId;
+    void (async () => {
+      const projectId = await this.deps.resolveProjectId?.(workspaceId);
+      if (!projectId) return;
+      const previous = this.projectQueues.get(projectId) ?? Promise.resolve();
+      const next = previous
+        .catch(() => undefined)
+        .then(() => this.summarizeProject(projectId, departure));
+      this.projectQueues.set(projectId, next);
+      await next
+        .catch((error) =>
+          this.deps.logger.warn(
+            { err: error, agentId: record.id, projectId },
+            "Project Momentum summary failed",
+          ),
+        )
+        .finally(() => {
+          if (this.projectQueues.get(projectId) === next) this.projectQueues.delete(projectId);
+        });
+    })();
+  }
+
+  private async summarizeProject(projectId: string, departure: AgentDeparture): Promise<void> {
+    const { record } = departure;
+    const previous = await this.projectCache.get(projectId);
+    const own = {
+      provider: record.provider,
+      model: record.runtimeInfo?.model ?? record.config?.model ?? undefined,
+      thinkingOptionId: record.runtimeInfo?.thinkingOptionId ?? record.config?.thinkingOptionId,
+    };
+    const cwd = (await directoryExists(record.cwd))
+      ? record.cwd
+      : (process.env.HOME ?? process.cwd());
+    // The agent's own model first; the usual Momentum models only if it cannot run.
+    const configured = this.deps.readDaemonConfig();
+    const fallbacks = await resolveStructuredGenerationProviders({
+      cwd,
+      providerSnapshotManager: this.deps.providerSnapshotManager,
+      daemonConfig: configured.metadataGeneration?.providers?.length
+        ? configured
+        : { metadataGeneration: { providers: DEFAULT_MOMENTUM_PROVIDERS } },
+      currentSelection: {
+        provider: record.provider,
+        model: own.model ?? null,
+        thinkingOptionId: "low",
+      },
+    }).catch(() => []);
+    const used: { provider: string; model: string | null } = {
+      provider: own.provider,
+      model: own.model ?? null,
+    };
+    const generate = this.deps.runner ?? generateStructuredAgentResponse;
+    const summary = await generateStructuredAgentResponseWithFallback({
+      manager: this.deps.agentManager,
+      cwd,
+      providers: [
+        {
+          provider: own.provider,
+          ...(own.model ? { model: own.model } : {}),
+          ...(own.thinkingOptionId ? { thinkingOptionId: own.thinkingOptionId } : {}),
+        },
+        ...fallbacks.filter(
+          (candidate) => candidate.provider !== own.provider || candidate.model !== own.model,
+        ),
+      ],
+      persistSession: false,
+      maxRetries: 1,
+      schema: PROJECT_SUMMARY_SCHEMA,
+      schemaName: "ProjectMomentum",
+      prompt: buildProjectPrompt(departure, previous),
+      agentConfigOverrides: { title: "Project Momentum summary", internal: true },
+      logger: this.deps.logger,
+      // Record which candidate actually produced the summary.
+      runner: async (options) => {
+        const result = await generate(options);
+        used.provider = options.agentConfig.provider;
+        used.model = options.agentConfig.model ?? null;
+        return result;
+      },
+    });
+    await this.projectCache.set({
+      projectId,
+      latest: limitWords(summary.latest, PROJECT_SUMMARY_WORDS),
+      next: limitWords(summary.next, PROJECT_SUMMARY_WORDS),
+      generatedAt: new Date().toISOString(),
+      agentId: record.id,
+      agentTitle: record.title ?? null,
+      provider: used.provider,
+      model: used.model,
+    });
+  }
+
+  /** The stored project summary, or null. */
+  getProjectMomentum(projectId: string): Promise<ProjectMomentum | null> {
+    return this.projectCache.get(projectId);
+  }
+
+  /**
+   * Gives every project that has per-agent summaries but no project summary one, taken from its
+   * newest agent summary. No model runs. Call once the workspace registry is loaded.
+   */
+  async seedProjects(): Promise<void> {
+    const { resolveProjectId } = this.deps;
+    if (!resolveProjectId) return;
+    const newest = new Map<string, Awaited<ReturnType<MomentumCache["all"]>>[number]>();
+    for (const entry of await this.cache.all()) {
+      const projectId = await resolveProjectId(entry.workspaceId);
+      if (!projectId) continue;
+      const current = newest.get(projectId);
+      if (!current || Date.parse(entry.generatedAt) > Date.parse(current.generatedAt)) {
+        newest.set(projectId, entry);
+      }
+    }
+    for (const [projectId, entry] of newest) {
+      if (await this.projectCache.get(projectId)) continue;
+      await this.projectCache.set({
+        projectId,
+        latest: limitWords(entry.focus, PROJECT_SUMMARY_WORDS),
+        next: limitWords(entry.next, PROJECT_SUMMARY_WORDS),
+        generatedAt: entry.generatedAt,
+        agentId: entry.agentId,
+        agentTitle: entry.title,
+        provider: null,
+        model: null,
+      });
+    }
   }
 
   start(): void {
@@ -227,4 +386,22 @@ function buildMomentumPrompt(agent: ManagedAgent, timeline: readonly AgentTimeli
     attention = `Paseo attention reason: ${agent.attention.attentionReason}.`;
   }
   return `Summarize this coding-agent session for a desktop hover card. Be specific and concise. Do not invent work, blockers, or user requests. “next” is the most likely concrete next action, not generic advice.\n\nAgent title: ${agent.config.title ?? "(untitled)"}\nLifecycle: ${agent.lifecycle}\n${attention}\n\nRecent transcript:\n${context || "(No recent transcript available.)"}`;
+}
+
+/** Keeps the first `limit` words; the model is told the limit, this enforces it. */
+export function limitWords(text: string, limit: number): string {
+  const words = text.trim().split(/\s+/);
+  return words.length <= limit ? words.join(" ") : `${words.slice(0, limit).join(" ")}…`;
+}
+
+function buildProjectPrompt(departure: AgentDeparture, previous: ProjectMomentum | null): string {
+  const recent: DepartureMessage[] = departure.transcript.slice(-PROJECT_CONTEXT_MESSAGES);
+  const transcript = recent
+    .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${message.text}`)
+    .join("\n\n")
+    .slice(-PROJECT_CONTEXT_CHARS);
+  const before = previous
+    ? `Earlier project summary (written ${previous.generatedAt}):\nLatest: ${previous.latest}\nNext: ${previous.next}`
+    : "There is no earlier summary for this project.";
+  return `A coding-agent session in a project is ending (${departure.reason}). Write a short project status for a hover card shown when no agent is active.\n\n"latest": what was most recently done in this project, at most ${PROJECT_SUMMARY_WORDS} words. "next": the most likely concrete next steps, at most ${PROJECT_SUMMARY_WORDS} words. Be specific. Do not invent work, blockers or requests. Keep still-relevant facts from the earlier summary when this session does not replace them.\n\nEnding session title: ${departure.record.title ?? "(untitled)"}\n\n${before}\n\nRecent transcript of the ending session:\n${transcript || "(No transcript available.)"}`;
 }

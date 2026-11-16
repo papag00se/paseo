@@ -8598,6 +8598,53 @@ test("fires onAgentArchived for stored-only snapshot archives", async () => {
   expect(archivedIds).toEqual([storedOnly.id]);
 });
 
+test("announces a departing agent once, with its conversation, on archive and on delete", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-departure-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+  });
+  const departures: Array<{ id: string; reason: string; transcript: unknown }> = [];
+  manager.setAgentDepartingCallback(({ record, reason, transcript }) => {
+    departures.push({ id: record.id, reason, transcript });
+  });
+  const create = (title: string) =>
+    manager.createAgent({ provider: "codex", cwd: workdir, title }, undefined, {
+      workspaceId: undefined,
+    });
+
+  // Archiving a live agent reads its conversation before the runtime closes.
+  const live = await create("Live");
+  await manager.appendTimelineItem(live.id, { type: "user_message", text: "Fix the build" });
+  await manager.appendTimelineItem(live.id, { type: "reasoning", text: "thinking" });
+  await manager.appendTimelineItem(live.id, { type: "assistant_message", text: "Fixed it" });
+  await manager.archiveAgent(live.id);
+  expect(departures).toEqual([
+    {
+      id: live.id,
+      reason: "archived",
+      transcript: [
+        { role: "user", text: "Fix the build" },
+        { role: "assistant", text: "Fixed it" },
+      ],
+    },
+  ]);
+
+  // Deleting an agent that was already archived does not announce it again.
+  await manager.announceDeparture(live.id, "deleted");
+  expect(departures).toHaveLength(1);
+
+  // Deleting an agent that was never archived does.
+  const other = await create("Other");
+  await manager.announceDeparture(other.id, "deleted");
+  expect(departures.map((entry) => [entry.id, entry.reason])).toEqual([
+    [live.id, "archived"],
+    [other.id, "deleted"],
+  ]);
+});
+
 test("native archive and restore release the loaded session writer", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-native-archive-writer-"));
   class WriterClient extends NativeArchiveRecordingClient {

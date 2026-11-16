@@ -1046,8 +1046,11 @@ export async function createPaseoDaemon(
     readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
     logger,
     paseoHome: config.paseoHome,
+    resolveProjectId: async (workspaceId) =>
+      (await workspaceRegistry?.get(workspaceId))?.projectId ?? null,
   });
   momentumService.start();
+  agentManager.setAgentDepartingCallback((departure) => momentumService.onDeparting(departure));
   logger.info({ elapsed: elapsed() }, "Agent storage initialized");
   await bootstrapWorkspaceRegistries({
     serverId,
@@ -1060,6 +1063,9 @@ export async function createPaseoDaemon(
   });
   await workspaceLabelService.initialize();
   logger.info({ elapsed: elapsed() }, "Workspace registries bootstrapped");
+  void momentumService
+    .seedProjects()
+    .catch((error) => logger.warn({ err: error }, "Project Momentum seeding failed"));
   const teardownArchivedWorkspaceRuntime = (workspaceId: string): void => {
     scriptRuntimeStore.removeForWorkspace(workspaceId);
     releaseWorkspaceServicePortPlan(workspaceId);
