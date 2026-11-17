@@ -149,7 +149,7 @@ rollback() {
   sleep 10
   if [ -d "$OPT/app.old" ]; then
     mv -T "$OPT/app" "$OPT/app.new" && mv -T "$OPT/app.old" "$OPT/app"
-    systemd-run --user --quiet --scope --slice=app.slice --unit="app-Paseo-rollback-$(date +%s).scope" -- setsid -f "$OPT/app/Paseo" >/dev/null 2>&1 < /dev/null
+    systemd-run --user --quiet --scope --slice=app.slice --unit="app-Paseo-rollback-$(date +%s).scope" -- setsid -f "$OPT/app/Paseo" >/dev/null 2>&1 < /dev/null 9>&-
     log "Previous build restored; the failed build is at $OPT/app.new"
   else
     log "No $OPT/app.old to restore; restore the build by hand"
@@ -166,7 +166,7 @@ wait_for_daemon() {
 }
 
 log "Step 3: swapping in the new build; Paseo and the daemon restart now, which ends every running agent"
-if ! PASEO_SWAP_SCOPE=1 "$OPT/swap-in-new-build.sh"; then
+if ! PASEO_SWAP_SCOPE=1 "$OPT/swap-in-new-build.sh" 9>&-; then
   fail 1 "the swap script failed before replacing the app (the old build is still in place). Quit Paseo from its menu, then rerun this script; the staged build is at $OPT/app.new."
 fi
 

@@ -47,6 +47,8 @@ export interface CreateAgentFromSessionInput {
   kind: "session";
   onAgentReady?: (agent: ManagedAgent) => Promise<void>;
   agentId?: string;
+  /** The agent that asked for this one; it is told when the new agent finishes. */
+  callerAgentId?: string;
   config: AgentSessionConfig;
   workspaceId: string;
   initialPrompt?: string;
@@ -177,15 +179,14 @@ export async function createAgentCommand(
     input.onCreated?.({ agentId: snapshot.id, createdWorktree: resolved.createdWorktree ?? null });
   }
   const notification =
-    input.kind === "mcp" &&
-    input.notifyOnFinish &&
+    (input.kind === "session" || input.notifyOnFinish) &&
     input.callerAgentId &&
     resolved.prompt !== undefined
       ? await requireFinishSubscriptions(dependencies).register(
           {
             childAgentId: snapshot.id,
             callerAgentId: input.callerAgentId,
-            requireParentOwnership: !(input.detached ?? false),
+            requireParentOwnership: input.kind === "mcp" && !(input.detached ?? false),
           },
           true,
         )
