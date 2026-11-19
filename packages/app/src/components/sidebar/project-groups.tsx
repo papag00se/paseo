@@ -159,6 +159,7 @@ export function ProjectGroupBlock({
             statusBucket={statusBucket}
             projectViewKey={`project-group:${id}`}
             backdrop="surfaceSidebar"
+            large
           />
           {collapsed ? (
             <ThemedChevronRight size={14} uniProps={mutedMapping} />
