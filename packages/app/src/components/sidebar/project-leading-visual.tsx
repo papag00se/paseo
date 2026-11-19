@@ -41,6 +41,12 @@ const STATUS_BADGE_OFFSET = -4;
 // the passive status dots.
 const DensityProjectIconView = withUnistyles(ProjectIconView);
 const projectIconProps = densityIconProps("md", () => ({}));
+// Project group headers show their icon at twice the project-row size.
+const LARGE_ICON_SCALE = 2;
+const largeProjectIconProps = (theme: Theme, rt: { breakpoint?: string }) => {
+  const props = projectIconProps(theme, rt);
+  return { ...props, size: props.size * LARGE_ICON_SCALE };
+};
 
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
@@ -66,6 +72,7 @@ export function ProjectLeadingVisual({
   chevron = null,
   showChevron = false,
   isArchiving = false,
+  large = false,
 }: {
   displayName: string;
   iconDataUri: string | null;
@@ -77,6 +84,8 @@ export function ProjectLeadingVisual({
   chevron?: "expand" | "collapse" | null;
   showChevron?: boolean;
   isArchiving?: boolean;
+  /** Twice the normal icon size, for project group headers. */
+  large?: boolean;
 }) {
   if (showChevron && chevron !== null) {
     return (
@@ -101,6 +110,7 @@ export function ProjectLeadingVisual({
       projectViewKey={projectViewKey}
       statusBucket={statusBucket}
       backdrop={backdrop}
+      large={large}
     />
   );
 }
@@ -118,6 +128,7 @@ export function ProjectStatusIndicator({
   backdrop,
   loading = false,
   testID,
+  large = false,
 }: {
   iconDataUri: string | null;
   displayName: string;
@@ -127,6 +138,7 @@ export function ProjectStatusIndicator({
   backdrop: SidebarSurfaceBackdrop;
   loading?: boolean;
   testID?: string;
+  large?: boolean;
 }) {
   const placeholderInitial = projectIconPlaceholderLabelFromDisplayName(displayName)
     .charAt(0)
@@ -139,7 +151,7 @@ export function ProjectStatusIndicator({
 
   return (
     <View
-      style={styles.projectLeadingVisualSlot}
+      style={large ? styles.projectLeadingVisualSlotLarge : styles.projectLeadingVisualSlot}
       testID={
         testID ??
         (statusBucket && statusBucket !== "done"
@@ -147,11 +159,12 @@ export function ProjectStatusIndicator({
           : "project-icon-only")
       }
     >
-      <View style={styles.projectIconBox}>
+      <View style={large ? styles.projectIconBoxLarge : styles.projectIconBox}>
         <ProjectIcon
           iconDataUri={iconDataUri}
           placeholderInitial={placeholderInitial}
           projectViewKey={projectViewKey}
+          large={large}
         />
         {badgeContent === null || badgeBucket === null ? null : (
           <ProjectStatusBadge
@@ -227,18 +240,20 @@ function ProjectIcon({
   iconDataUri,
   placeholderInitial,
   projectViewKey,
+  large,
 }: {
   iconDataUri: string | null;
   placeholderInitial: string;
   projectViewKey: string;
+  large: boolean;
 }) {
   return (
     <DensityProjectIconView
       iconDataUri={iconDataUri}
       initial={placeholderInitial}
       projectViewKey={projectViewKey}
-      textStyle={styles.projectIconFallbackText}
-      uniProps={projectIconProps}
+      textStyle={large ? styles.projectIconFallbackTextLarge : styles.projectIconFallbackText}
+      uniProps={large ? largeProjectIconProps : projectIconProps}
     />
   );
 }
@@ -257,6 +272,10 @@ function getStatusDotColorStyle(bucket: ProjectStatusBadgeDotBucket): ViewStyle 
   if (bucket === "failed") return styles.statusDotFailed;
   if (bucket === "running") return styles.statusDotRunning;
   return styles.statusDotAttention;
+}
+
+function scaleDensity(value: { xs: number; md: number }, factor: number) {
+  return { xs: value.xs * factor, md: value.md * factor };
 }
 
 const styles = StyleSheet.create((theme) => {
@@ -292,6 +311,21 @@ const styles = StyleSheet.create((theme) => {
     },
     projectIconFallbackText: {
       fontSize: 9,
+    },
+    projectLeadingVisualSlotLarge: {
+      width: scaleDensity(densityIconBox("md"), LARGE_ICON_SCALE),
+      height: scaleDensity(densityIconBox("md"), LARGE_ICON_SCALE),
+      flexShrink: 0,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    projectIconBoxLarge: {
+      position: "relative",
+      width: scaleDensity(densityIconBox("md"), LARGE_ICON_SCALE),
+      height: scaleDensity(densityIconBox("md"), LARGE_ICON_SCALE),
+    },
+    projectIconFallbackTextLarge: {
+      fontSize: 9 * LARGE_ICON_SCALE,
     },
     // The shell the alert and dot statuses share. It straddles the icon's bottom-right corner
     // (half in, half out) so the lettered project box stays readable. The shell is a knockout:
