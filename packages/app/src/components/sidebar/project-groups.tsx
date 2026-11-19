@@ -441,7 +441,8 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     borderRadius: theme.borderRadius.sm,
   },
-  groupChildren: { paddingLeft: theme.spacing[2] },
+  // 10px deeper than the row padding so projects read as nested under their group.
+  groupChildren: { paddingLeft: theme.spacing[2] + 10 },
   footer: {
     flex: 1,
     flexDirection: "row",
