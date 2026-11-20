@@ -97,6 +97,7 @@ vi.mock("lucide-react-native", async (importOriginal) => {
     ExternalLink: icon("ExternalLink"),
     Pencil: icon("Pencil"),
     FolderGit2: icon("FolderGit2"),
+    FolderOpen: icon("FolderOpen"),
   };
 });
 
@@ -182,6 +183,7 @@ function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceS
     status: "done",
     currentBranch: "main",
     changeRequestNumber: null,
+    background: false,
     statusEnteredAt: null,
     ...overrides,
   };

@@ -236,7 +236,7 @@ export class MomentumService {
 
   private async backfillStartupCandidates(): Promise<void> {
     const cutoff = Date.now() - RECENT_ACTIVITY_MS;
-    const records = await this.deps.agentStorage.list();
+    const records = await this.deps.agentStorage.listAll();
     // Capture summaries already on agent records before anything deletes those agents.
     try {
       await this.cache.record(

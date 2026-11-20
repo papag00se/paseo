@@ -1,17 +1,24 @@
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
-import type { connectToDaemon } from "./client.js";
 import type { CommandError } from "../output/index.js";
+import { resolveAgentId, type connectToDaemon } from "./client.js";
 
-type FetchAgentsOptions = NonNullable<
-  Parameters<Awaited<ReturnType<typeof connectToDaemon>>["fetchAgents"]>[0]
->;
+type DaemonClient = Awaited<ReturnType<typeof connectToDaemon>>;
+type FetchAgentsOptions = NonNullable<Parameters<DaemonClient["fetchAgents"]>[0]>;
 
-interface AgentDirectoryClient {
+export interface AgentDirectoryClient {
   fetchAgents(options?: FetchAgentsOptions): Promise<{
     entries: { agent: AgentSnapshotPayload }[];
     pageInfo: { nextCursor: string | null };
   }>;
 }
+
+export interface AgentLookupClient extends AgentDirectoryClient {
+  fetchAgent(options: { agentId: string }): Promise<{
+    agent: AgentSnapshotPayload;
+  } | null>;
+}
+
+const FULL_AGENT_UUID_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 /** Read the complete directory without agents moving between pages as they update. */
 export async function fetchAllAgents(
@@ -33,20 +40,49 @@ export async function fetchAllAgents(
   return agents;
 }
 
-interface AgentLookupClient {
-  fetchAgent(options: { agentId: string }): Promise<{ agent: AgentSnapshotPayload } | null>;
+/**
+ * Resolve an agent by ID, prefix, or name.
+ *
+ * Fork change: ask the daemon first. `fetch_agent` resolves an ID, unique prefix or exact title
+ * against the daemon's own records in one request. Paging the whole directory first made every
+ * archive, reload or detach read every stored agent, which froze a daemon holding ~19,000 of them.
+ * Only when the daemon finds nothing is the directory read, for the partial-title matching it
+ * cannot do and for agents it omits.
+ */
+export async function resolveAgentEntry(
+  client: AgentLookupClient,
+  agentIdArg: string,
+): Promise<AgentSnapshotPayload | null> {
+  const trimmed = agentIdArg.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const fetchResult = await client.fetchAgent({ agentId: trimmed });
+  if (fetchResult) {
+    // COMPAT(fullAgentIdExact): daemons before v0.16.0 resolve a full agent ID that matches no
+    // agent to an agent titled with it, so accept their answer only when it is that ID.
+    if (!FULL_AGENT_UUID_PATTERN.test(trimmed) || fetchResult.agent.id === trimmed.toLowerCase()) {
+      return fetchResult.agent;
+    }
+    return null;
+  }
+  if (FULL_AGENT_UUID_PATTERN.test(trimmed)) {
+    return null;
+  }
+
+  const agents = await fetchAllAgents(client, { filter: { includeArchived: true } });
+  const listedId = resolveAgentId(agentIdArg, agents);
+  return listedId ? (agents.find((entry) => entry.id === listedId) ?? null) : null;
 }
 
-/**
- * Resolve one agent by ID, unique ID prefix or exact title. The daemon resolves the
- * identifier against its own records, so this never pages the whole directory.
- */
+/** Resolve one agent through the daemon in a single request, or fail with AGENT_NOT_FOUND. */
 export async function fetchAgentOrNotFound(
   client: AgentLookupClient,
   idOrName: string,
 ): Promise<AgentSnapshotPayload> {
-  const result = await client.fetchAgent({ agentId: idOrName });
-  if (!result) {
+  const agent = await resolveAgentEntry(client, idOrName);
+  if (!agent) {
     const error: CommandError = {
       code: "AGENT_NOT_FOUND",
       message: `Agent not found: ${idOrName}`,
@@ -54,5 +90,5 @@ export async function fetchAgentOrNotFound(
     };
     throw error;
   }
-  return result.agent;
+  return agent;
 }

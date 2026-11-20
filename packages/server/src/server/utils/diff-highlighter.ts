@@ -100,11 +100,6 @@ function extractPathFromDiffHeader(lines: string[]): string {
   }
 
   const firstLine = lines[0] ?? "";
-  const prefixedPathMatch = firstLine.match(/^([abciow])\/(.+) ([abciow])\/(.+)$/);
-  if (prefixedPathMatch && prefixedPathMatch[1] !== prefixedPathMatch[3]) {
-    return prefixedPathMatch[4];
-  }
-
   const quotedPathMatch =
     firstLine.match(/^("(?:\\.|[^"\\])*") (.+)$/) ?? firstLine.match(/^(.+) ("(?:\\.|[^"\\])*")$/);
   if (quotedPathMatch) {
@@ -116,15 +111,21 @@ function extractPathFromDiffHeader(lines: string[]): string {
     return newPath;
   }
 
-  const oldMetadataPath = extractPathFromMetadata(lines, "--- ");
-  const newMetadataPath = extractPathFromMetadata(lines, "+++ ");
-  const metadataPath = newMetadataPath ?? oldMetadataPath;
-  if (metadataPath) {
-    return oldMetadataPath &&
-      newMetadataPath &&
-      usesDiffPathPrefixes(oldMetadataPath, newMetadataPath)
-      ? metadataPath.slice(2)
-      : metadataPath;
+  // The ---/+++ records are unambiguous even when a path contains " b/".
+  const oldMetadata = extractPathFromMetadata(lines, "--- ");
+  const newMetadata = extractPathFromMetadata(lines, "+++ ");
+  const metadata = newMetadata ?? oldMetadata;
+  if (metadata) {
+    const prefixed =
+      (oldMetadata !== null &&
+        newMetadata !== null &&
+        usesDiffPathPrefixes(oldMetadata, newMetadata)) ||
+      firstLine === `a/${metadata.slice(2)} b/${metadata.slice(2)}`;
+    return prefixed ? metadata.slice(2) : metadata;
+  }
+  const plainPrefixedMatch = firstLine.match(/^a\/(.+) b\/(.+)$/);
+  if (plainPrefixedMatch) {
+    return plainPrefixedMatch[2];
   }
 
   const pathMatch = firstLine.match(/^(\S+)\s+(\S+)$/);
@@ -497,13 +498,33 @@ function applyTokensToHunks(
         newLineNum++;
       }
 
-      return tokens ? { ...line, tokens } : line;
+      const matchingTokens = tokensForPatchLine(tokens, line.content);
+      return matchingTokens ? { ...line, tokens: matchingTokens } : line;
     });
 
     return { ...hunk, lines: highlightedLines };
   });
 
   return { ...file, hunks: highlightedHunks };
+}
+
+function tokensForPatchLine(
+  tokens: HighlightToken[] | undefined,
+  content: string,
+): HighlightToken[] | undefined {
+  if (!tokens) return undefined;
+  const source = tokens.map((token) => token.text).join("");
+  if (source === content) return tokens;
+  // Git can normalize a CRLF worktree while source highlighting retains its CR.
+  if (source !== `${content}\r`) return undefined;
+  const aligned: HighlightToken[] = [];
+  let remaining = content.length;
+  for (const token of tokens) {
+    const text = token.text.slice(0, remaining);
+    if (text) aligned.push({ text, style: token.style });
+    remaining -= text.length;
+  }
+  return aligned;
 }
 
 /**

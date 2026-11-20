@@ -22,6 +22,7 @@ import {
   ContextMenuItem,
   useContextMenu,
 } from "@/components/ui/context-menu";
+import { useForgeShorthand } from "@/git/forge-shorthand";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import type { Theme } from "@/styles/theme";
@@ -53,11 +54,19 @@ const openParentInEditorLeading = <ThemedFolderOpen size={14} uniProps={mutedCol
 
 // File links keep the library's inline anchor; a right click opens editor actions at the pointer.
 function WebLink(props: LinkRendererProps) {
-  const fileLink = useFileLink(markdownLinkSource(props.link.url, props.link.sourceType));
-  if (!fileLink.target) return <WebLinkAnchor {...props} fileLink={fileLink} />;
+  const forgeShorthand = useForgeShorthand();
+  // A forge reference like `#12` carries its web URL so hover, copy and new-tab opens work.
+  const forgeUrl =
+    props.link.sourceType === "text" ? forgeShorthand?.resolve(props.link.url) : null;
+  const fileLink = useFileLink(
+    forgeUrl
+      ? markdownLinkSource(forgeUrl)
+      : markdownLinkSource(props.link.url, props.link.sourceType),
+  );
+  if (!fileLink.target) return <WebLinkAnchor {...props} fileLink={fileLink} forgeUrl={forgeUrl} />;
   return (
     <ContextMenu>
-      <WebLinkAnchor {...props} fileLink={fileLink} />
+      <WebLinkAnchor {...props} fileLink={fileLink} forgeUrl={forgeUrl} />
       <ContextMenuContent align="start" width={220}>
         <ContextMenuItem leading={openInEditorLeading} onSelect={fileLink.onOpenInEditor}>
           Open in Editor…
@@ -95,8 +104,10 @@ function WebLinkAnchor({
   anchorProps,
   children,
   fileLink,
-}: LinkRendererProps & { fileLink: ReturnType<typeof useFileLink> }) {
+  forgeUrl,
+}: LinkRendererProps & { fileLink: ReturnType<typeof useFileLink>; forgeUrl: string | null | undefined }) {
   const { tooltipPath, onHoverIn } = fileLink;
+  const tooltip = forgeUrl ?? tooltipPath;
   const [hovered, setHovered] = useState(false);
   const handleMouseEnter = useCallback(() => setHovered(true), []);
   const handleMouseLeave = useCallback(() => setHovered(false), []);
@@ -111,6 +122,7 @@ function WebLinkAnchor({
   const renderAnchor = (onContextMenu?: (event: MouseEvent) => void) => (
     <a
       {...anchorProps}
+      href={forgeUrl ?? anchorProps.href}
       style={anchorStyle}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -129,10 +141,10 @@ function WebLinkAnchor({
       <TooltipTrigger asChild onHoverIn={onHoverIn}>
         <InlineLinkTrigger>{anchor}</InlineLinkTrigger>
       </TooltipTrigger>
-      {tooltipPath ? (
+      {tooltip ? (
         <TooltipContent side="top" align="start" maxWidth={520}>
           <Text selectable={false} style={styles.tooltipPath}>
-            {tooltipPath}
+            {tooltip}
           </Text>
         </TooltipContent>
       ) : null}
