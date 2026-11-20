@@ -188,6 +188,9 @@ send_resume() { paseo send --no-wait --prompt-file "$MESSAGE_FILE" "$1" >/dev/nu
 
 resume_agent() { # $1 id, $2 name
   local id=$1 name=$2
+  # Paseo 0.16 resumes agents that were running at startup itself when agents.resumeOnStartup is on.
+  # Give it a moment, and message only the agents it did not resume.
+  if [ "$(agent_status "$id")" = running ]; then log "  $id $name was already resumed by the daemon"; return 0; fi
   if send_resume "$id"; then
     sleep "$SETTLE_SECONDS"
     case "$(agent_status "$id")" in error|"") ;; *) log "  resumed $id $name"; return 0;; esac
@@ -203,6 +206,10 @@ resume_agent() { # $1 id, $2 name
 }
 
 log "Step 5: resuming agents that were running"
+if [ "$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.paseo/config.json"))).get("agents",{}).get("resumeOnStartup",False))' 2>/dev/null)" = True ]; then
+  log "  agents.resumeOnStartup is on: waiting ${SETTLE_SECONDS}s for the daemon to resume them first"
+  sleep "$SETTLE_SECONDS"
+fi
 RESUME_FAILURES=0
 while IFS=$'\t' read -r id name; do
   [ -n "$id" ] || continue

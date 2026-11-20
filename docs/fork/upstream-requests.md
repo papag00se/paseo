@@ -2,6 +2,8 @@
 
 Inventory of every custom code change this fork carries against `v0.14.0` (2026-11-01), whether it could live in a plugin today, what upstream already has on file, and ready-to-send drafts for what is missing. Nothing here has been posted yet.
 
+**Update 2026-11-20 (v0.16.2 merge):** upstream now covers restart recovery (`agents.resumeOnStartup`), daemon-wide agent-removal broadcast, chunked transport, Pi tool-result images and null tool arguments, so those fork copies were dropped. See [The 0.16.2 merge](README.md#the-0162-merge-2026-11-20) for what remains fork-only and why none of it fits the plugin API yet.
+
 ## Inventory
 
 | Fork change                                                                                                               | Code                                                         | Plugin today?                                                                                                                                                     | Upstream already                                                                                                                                                                                                                                                                                        | Action                                                                                                             |
